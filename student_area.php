@@ -25,9 +25,13 @@ if (!$user || $user['role'] !== 'student') {
         <div class="navbar-header">
             <a class="navbar-brand" href="index.php">SPVAIRecordsOffice</a>
         </div>
+        <ul class="nav navbar-nav">
+            <li class="active"><a href="student_area.php">Dashboard</a></li>
+            <li><a href="request_document.php">Request Document</a></li>
+            <li><a href="my_requests.php">My Requests</a></li>
+        </ul>
         <ul class="nav navbar-nav navbar-right">
             <li><a href="logout.php"><span class="glyphicon glyphicon-log-out"></span> Logout</a></li>
-            <li><a href="index.php">Home</a></li>
         </ul>
     </div>
 </nav>
