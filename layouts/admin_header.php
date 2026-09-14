@@ -1,6 +1,6 @@
 <?php
 // layouts/admin_header.php
-require_once('class/Auth.php');
+require_once __DIR__ . '/../class/Auth.php';
 $auth->requireRole('admin');
 ?>
 <!DOCTYPE html>

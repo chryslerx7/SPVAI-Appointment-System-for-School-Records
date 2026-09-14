@@ -1,5 +1,5 @@
 <?php
-require_once('layouts/admin_header.php');
+require_once __DIR__ . '/../layouts/admin_header.php';
 
 $requestId = $_GET['id'] ?? null;
 
@@ -196,7 +196,7 @@ $refNumber = sprintf("SPVAI-%s-%07d", $year, $requestId);
     </div>
 </div>
 
-<?php require_once('layouts/admin_footer.php'); ?>
+<?php require_once __DIR__ . '/../layouts/admin_footer.php'; ?>
 <script>
 $(document).on('submit', '#form-update-status', function(e) {
     e.preventDefault();

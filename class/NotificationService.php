@@ -117,7 +117,7 @@ class NotificationService extends Database {
             ],
         ];
 
-        return $templates[$type] ?? ['subject' => 'SPVAI Notification', 'body, 'Message regarding your request.'];
+        return $templates[$type] ?? ['subject' => 'SPVAI Notification', 'body' => 'Message regarding your request.'];
     }
 }
 

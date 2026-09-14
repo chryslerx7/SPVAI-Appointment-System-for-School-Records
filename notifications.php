@@ -27,7 +27,7 @@ $notifications = $auth->getRows($sql, [$_SESSION['user_id']]);
                                 <span class="w-3 h-3 bg-red-500 border border-black rounded-full"></span>
                             <?php endif; ?>
                             <span class="text-xs font-black uppercase tracking-widest text-gray-500">
-                                <?= htmlspecialchars(ucwords(str_replace('_', ' ', $notif['type'])); ?></span>
+                                <?= htmlspecialchars(ucwords(str_replace('_', ' ', $notif['type']))); ?></span>
                             <span class="text-[10px] font-bold text-gray-400 ml-auto"><?= date('M d, Y h:i A', strtotime($notif['created_at'])); ?></span>
                         </div>
                         <p class="text-lg font-bold leading-tight"><?= htmlspecialchars($notif['message']); ?></p>

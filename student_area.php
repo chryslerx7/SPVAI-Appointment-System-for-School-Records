@@ -1,6 +1,13 @@
 <?php
 require_once('layouts/student_header.php');
 
+// Fetch authenticated user data
+$user = $auth->getCurrentUser();
+if (!$user) {
+    header("Location: login.php");
+    exit();
+}
+
 // Fetch summary statistics
 $userId = $_SESSION['user_id'];
 

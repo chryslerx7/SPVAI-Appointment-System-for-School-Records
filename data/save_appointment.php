@@ -68,7 +68,7 @@ try {
     $booked = $result['count'] ?? 0;
 
     if ($booked >= $config['capacity']['max_per_slot']) {
-        $auth->Commit(); // Close transaction
+        $auth->Rollback(); // Close transaction and discard changes
         echo json_encode(['valid' => false, 'msg' => 'This time slot has just become full. Please choose another.']);
         exit();
     }
@@ -85,7 +85,7 @@ try {
         'url' => 'appointment_confirmation.php?id=' . $appId
     ]);
 } catch (Exception $e) {
-    $auth->Commit(); // Attempt to close if not already
+    $auth->Rollback(); // Roll back the transaction on error
     echo json_encode(['valid' => false, 'msg' => 'Database error: ' . $e->getMessage()]);
 }
 ?>
