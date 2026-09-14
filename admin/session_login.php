@@ -1,9 +1,7 @@
-<?php 
-if(session_status() == PHP_SESSION_NONE)
-{
-	session_start();//start session if session not start
-}
+<?php
+require_once('session_login.php'); // Keep for legacy
+require_once('../class/Auth.php');
 
-if(!isset($_SESSION['logged'])){
-	header('location: index.php');
-}
+// Ensure the user is logged in and is an administrator
+$auth->requireRole('admin', 'index.php');
+?>
