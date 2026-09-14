@@ -31,7 +31,7 @@ if ($user) {
     // Authentication successful
     // The Auth class already handled session_regenerate_id and session storage
 
-    $url = ($user['role'] === 'admin') ? 'admin/reservation.php' : 'student_area.php';
+    $url = ($user['role'] === 'admin') ? 'admin/dashboard.php' : 'student_area.php';
 
     echo json_encode(['valid' => true, 'msg' => 'Login successful!', 'url' => $url]);
 } else {
