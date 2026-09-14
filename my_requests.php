@@ -92,6 +92,15 @@ $myRequests = $auth->getRows($sql, [$_SESSION['user_id']]);
                                         <td><span class="label <?= $statusLabel; ?>"><?= htmlspecialchars($req['status']); ?></span></td>
                                         <td>
                                             <a href="request_details.php?id=<?= $req['request_id']; ?>" class="btn btn-xs btn-info">Details</a>
+                                            <?php
+                                                // Show "Schedule" button if status is appropriate and no active appointment exists
+                                                $appSql = "SELECT appointment_id FROM appointments WHERE request_id = ? AND status != 'Cancelled' LIMIT 1";
+                                                $hasApp = $auth->getRow($appSql, [$req['request_id']]);
+                                                $allowedStatuses = ['Pending', 'Approved', 'Processing', 'Ready'];
+                                                if (!$hasApp && in_array($req['status'], $allowedStatuses)) {
+                                                    echo '<a href="appointments.php?id=' . $req['request_id'] . '" class="btn btn-xs btn-success">Schedule</a>';
+                                                }
+                                            ?>
                                         </td>
                                     </tr>
                                     <?php endforeach; ?>

@@ -107,6 +107,21 @@ $refNumber = sprintf("SPVAI-%s-%07d", $year, $requestId);
                             </td>
                         </tr>
                         <tr>
+                            <th class="info">Appointment</th>
+                            <td>
+                                <?php
+                                    $appSql = "SELECT * FROM appointments WHERE request_id = ? AND status != 'Cancelled' LIMIT 1";
+                                    $appointment = $auth->getRow($appSql, [$requestId]);
+                                    if ($appointment): ?>
+                                        <strong><?= date('F j, Y', strtotime($appointment['appointment_date'])); ?></strong> at
+                                        <strong><?= date('h:i A', strtotime($appointment['appointment_time'])); ?></strong>
+                                        <span class="label label-info"><?= htmlspecialchars($appointment['status']); ?></span>
+                                    <?php else: ?>
+                                        No appointment scheduled.
+                                    <?php endif; ?>
+                                </td>
+                        </tr>
+                        <tr>
                             <th class="info">Admin Remarks</th>
                             <td><?= !empty($request['remarks']) ? htmlspecialchars($request['remarks']) : 'No remarks yet.'; ?></td>
                         </tr>
