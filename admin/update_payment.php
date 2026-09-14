@@ -1,5 +1,6 @@
 <?php
 require_once('../class/Auth.php');
+require_once('../class/NotificationService.php');
 
 header('Content-Type: application/json');
 
@@ -47,6 +48,39 @@ $sql = "UPDATE payments SET payment_status = ?, remarks = ?, verified_by = ?, ve
 
 try {
     $auth->insertRow($sql, [$status, $remarks, $adminId, $verifiedAt, $paymentId]);
+
+    // --- NOTIFICATION TRIGGER ---
+    $payDataSql = "SELECT p.*, r.request_id, u.user_id, dt.document_name
+                   FROM payments p
+                   JOIN requests r ON p.request_id = r.request_id
+                   JOIN users u ON r.user_id = u.user_id
+                   JOIN document_types dt ON r.document_id = dt.document_id
+                   WHERE p.payment_id = ?";
+    $details = $auth->getRow($payDataSql, [$paymentId]);
+
+    if ($details) {
+        $year = date('Y', strtotime($details['created_at']));
+        $refNum = sprintf("SPVAI-%s-%07d", $year, $details['request_id']);
+
+        $type = '';
+        $emailKey = '';
+        switch($status) {
+            case 'Paid': $type = 'payment_paid'; $emailKey = 'payment_verified'; break;
+            case 'Rejected': $type = 'payment_rejected'; $emailKey = 'payment_rejected'; break;
+        }
+
+        if ($type) {
+            $msg = "Payment for request " . $refNum . " status updated to: " . $status . ".";
+            $emailData = [
+                'ref' => $refNum,
+                'amount' => number_format($details['amount'], 2),
+                'method' => $details['payment_method']
+            ];
+            $template = $notificationService->getTemplate($emailKey, $emailData);
+            $notificationService->notifyUser($details['user_id'], $details['request_id'], $type, $msg, $template);
+        }
+    }
+
     echo json_encode(['valid' => true, 'msg' => 'Payment status updated successfully!']);
 } catch (Exception $e) {
     echo json_encode(['valid' => false, 'msg' => 'Database error: ' . $e->getMessage()]);

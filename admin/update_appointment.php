@@ -1,5 +1,6 @@
 <?php
 require_once('../class/Auth.php');
+require_once('../class/NotificationService.php');
 
 header('Content-Type: application/json');
 
@@ -43,6 +44,40 @@ $sql = "UPDATE appointments SET status = ?, remarks = ? WHERE appointment_id = ?
 
 try {
     $auth->insertRow($sql, [$status, $remarks, $appId]);
+
+    // --- NOTIFICATION TRIGGER ---
+    $appDataSql = "SELECT a.*, r.request_id, u.user_id, dt.document_name
+                   FROM appointments a
+                   JOIN requests r ON a.request_id = r.request_id
+                   JOIN users u ON r.user_id = u.user_id
+                   JOIN document_types dt ON r.document_id = dt.document_id
+                   WHERE a.appointment_id = ?";
+    $details = $auth->getRow($appDataSql, [$appId]);
+
+    if ($details) {
+        $year = date('Y', strtotime($details['created_at']));
+        $refNum = sprintf("SPVAI-%s-%07d", $year, $details['request_id']);
+
+        $type = '';
+        $emailKey = '';
+        switch($status) {
+            case 'Confirmed': $type = 'appointment_confirmed'; $emailKey = 'appointment_confirmed'; break;
+            case 'Cancelled': $type = 'appointment_cancelled'; $emailKey = 'appointment_cancelled'; break;
+        }
+
+        if ($type) {
+            $msg = "Your appointment for request " . $refNum . " has been updated to: " . $status . ".";
+            $emailData = [
+                'ref' => $refNum,
+                'doc' => $details['document_name'],
+                'date' => date('F j, Y', strtotime($details['appointment_date'])),
+                'time' => date('h:i A', strtotime($details['appointment_time']))
+            ];
+            $template = $notificationService->getTemplate($emailKey, $emailData);
+            $notificationService->notifyUser($details['user_id'], $details['request_id'], $type, $msg, $template);
+        }
+    }
+
     echo json_encode(['valid' => true, 'msg' => 'Appointment status updated successfully!']);
 } catch (Exception $e) {
     echo json_encode(['valid' => false, 'msg' => 'Database error: ' . $e->getMessage()]);
