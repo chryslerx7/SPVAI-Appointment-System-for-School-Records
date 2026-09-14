@@ -1,8 +1,5 @@
 <?php
-require_once('../class/Auth.php');
-
-// Ensure only admins can access
-$auth->requireRole('admin');
+require_once('layouts/admin_header.php');
 
 // Get search and sort parameters
 $search = trim($_GET['search'] ?? '');
@@ -50,134 +47,111 @@ if ($search) {
 $total = $auth->getRow($countSql, $params)['total'] ?? 0;
 $totalPages = ceil($total / $limit);
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link class="icon" rel="icon" type="images/x-icon" href="images/spvai.ico">
-    <title>Manage Requests - SPVAI Admin</title>
-    <link rel="stylesheet" type="text/css" href="../assets/css/bootstrap.min.css">
-    <link rel="stylesheet" type="text/css" href="../assets/css/bootstrap-theme.min.css">
-</head>
-<body style="background-color: #f4f7f6;">
 
-<nav class="navbar navbar-inverse">
-    <div class="container-fluid">
-        <div class="navbar-header">
-            <a class="navbar-brand" href="#">SPVAI Admin</a>
+<div class="max-w-7xl mx-auto">
+    <header class="mb-12 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+            <h1 class="text-5xl font-black uppercase tracking-tighter mb-2">Document Requests</h1>
+            <p class="text-lg font-bold text-gray-600 uppercase tracking-wide">Review and manage all incoming student requests.</p>
         </div>
-        <ul class="nav navbar-nav">
-            <li><a href="dashboard.php">Dashboard</a></li>
-            <li class="active"><a href="requests.php">Requests</a></li>
-            <li><a href="appointments.php">Appointments</a></li>
-            <li><a href="payments.php">Payments</a></li>
-        </ul>
-        <ul class="nav navbar-nav navbar-right">
-            <li><a href="../logout.php"><span class="glyphicon glyphicon-log-out"></span> Logout</a></li>
-        </ul>
-    </div>
-</nav>
+    </header>
 
-<div class="container-fluid">
-    <div class="row">
-        <div class="col-md-12">
-            <h2 class="page-header">Document Requests</h2>
-        </div>
-    </div>
-
-    <div class="row">
-        <div class="col-md-12">
-            <div class="panel panel-default">
-                <div class="panel-body">
-                    <form method="GET" class="form-inline" style="margin-bottom: 20px;">
-                        <div class="form-group">
-                            <input type="text" name="search" class="form-control" placeholder="Search student, ID, doc..." value="<?= htmlspecialchars($search); ?>">
-                        </div>
-                        <div class="form-group">
-                            <select name="sort" class="form-control">
-                                <option value="created_at" <?= $sortBy == 'created_at' ? 'selected' : ''; ?>>Date</option>
-                                <option value="status" <?= $sortBy == 'status' ? 'selected' : ''; ?>>Status</option>
-                                <option value="document_id" <?= $sortBy == 'document_id' ? 'selected' : ''; ?>>Document</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <select name="order" class="form-control">
-                                <option value="DESC" <?= $order == 'DESC' ? 'selected' : ''; ?>>Newest First</option>
-                                <option value="ASC" <?= $order == 'ASC' ? 'selected' : ''; ?>>Oldest First</option>
-                            </select>
-                        </div>
-                        <button type="submit" class="btn btn-primary">Filter</button>
-                        <a href="requests.php" class="btn btn-default">Reset</a>
-                    </form>
-
-                    <div class="table-responsive">
-                        <table class="table table-hover table-striped">
-                            <thead>
-                                <tr>
-                                    <th>Ref #</th>
-                                    <th>Student</th>
-                                    <th>ID</th>
-                                    <th>Document</th>
-                                    <th>Status</th>
-                                    <th>Date</th>
-                                    <th>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php if (empty($requests)): ?>
-                                    <tr><td colspan="7" class="text-center">No requests found.</td></tr>
-                                <?php else: ?>
-                                    <?php foreach($requests as $req):
-                                        $year = date('Y', strtotime($req['created_at']));
-                                        $refNum = sprintf("SPVAI-%s-%07d", $year, $req['request_id']);
-
-                                        $statusLabel = 'label-default';
-                                        switch($req['status']) {
-                                            case 'Pending': $statusLabel = 'label-warning'; break;
-                                            case 'Approved': $statusLabel = 'label-info'; break;
-                                            case 'Processing': $statusLabel = 'label-primary'; break;
-                                            case 'Ready': $statusLabel = 'label-success'; break;
-                                            case 'Completed': $statusLabel = 'label-success'; break;
-                                            case 'Rejected': $statusLabel = 'label-danger'; break;
-                                            case 'Cancelled': $statusLabel = 'label-default'; break;
-                                        }
-                                    ?>
-                                    <tr>
-                                        <td><strong><?= $refNum; ?></strong></td>
-                                        <td><?= htmlspecialchars($req['first_name'] . ' ' . $req['last_name']); ?></td>
-                                        <td><?= htmlspecialchars($req['student_id']); ?></td>
-                                        <td><?= htmlspecialchars($req['document_name']); ?></td>
-                                        <td><span class="label <?= $statusLabel; ?>"><?= htmlspecialchars($req['status']); ?></span></td>
-                                        <td><?= date('M d, Y', strtotime($req['created_at'])); ?></td>
-                                        <td>
-                                            <a href="request_details.php?id=<?= $req['request_id']; ?>" class="btn btn-xs btn-info">View/Manage</a>
-                                        </td>
-                                    </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <!-- Pagination -->
-                        <nav>
-                            <ul class="pagination">
-                                <?php for($i=1; $i<=$totalPages; $i++): ?>
-                                    <li class="<?= $i == $page ? 'active' : ''; ?>">
-                                        <a href="?page=<?= $i; ?>&search=<?= urlencode($search); ?>&sort=<?= $sortBy; ?>&order=<?= $order; ?>"><?= $i; ?></a>
-                                    </li>
-                                <?php endfor; ?>
-                            </ul>
-                        </nav>
-                    </div>
+    <div class="bg-white border-4 border-black shadow-brutal-lg overflow-hidden">
+        <!-- Filter Bar -->
+        <div class="p-6 border-b-4 border-black bg-gray-50">
+            <form method="GET" class="flex flex-col md:flex-row gap-4">
+                <div class="flex-1 relative">
+                    <input type="text" name="search" class="w-full border-2 border-black p-3 rounded-none focus:outline-none focus:ring-2 focus:ring-black font-bold"
+                           placeholder="Search student, ID, doc..." value="<?= htmlspecialchars($search); ?>">
                 </div>
+                <div class="flex gap-2">
+                    <select name="sort" class="border-2 border-black p-3 rounded-none bg-white font-bold focus:outline-none">
+                        <option value="created_at" <?= $sortBy == 'created_at' ? 'selected' : ''; ?>>Date</option>
+                        <option value="status" <?= $sortBy == 'status' ? 'selected' : ''; ?>>Status</option>
+                        <option value="document_id" <?= $sortBy == 'document_id' ? 'selected' : ''; ?>>Document</option>
+                    </select>
+                    <select name="order" class="border-2 border-black p-3 rounded-none bg-white font-bold focus:outline-none">
+                        <option value="DESC" <?= $order == 'DESC' ? 'selected' : ''; ?>>Newest First</option>
+                        <option value="ASC" <?= $order == 'ASC' ? 'selected' : ''; ?>>Oldest First</option>
+                    </select>
+                    <button type="submit" class="px-6 py-3 bg-brutal-yellow border-2 border-black font-black uppercase shadow-brutal hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all">
+                        Filter
+                    </button>
+                    <a href="requests.php" class="px-6 py-3 border-2 border-black bg-white font-black uppercase shadow-brutal hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all text-center">
+                        Reset
+                    </a>
+                </div>
+            </form>
+        </div>
+
+        <!-- Requests Table -->
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-black text-white uppercase text-xs font-black tracking-widest">
+                        <th class="p-4 border-r-2 border-gray-800">Ref #</th>
+                        <th class="p-4 border-r-2 border-gray-800">Student</th>
+                        <th class="p-4 border-r-2 border-gray-800">Student ID</th>
+                        <th class="p-4 border-r-2 border-gray-800">Document</th>
+                        <th class="p-4 border-r-2 border-gray-800 text-center">Status</th>
+                        <th class="p-4 border-r-2 border-gray-800">Date</th>
+                        <th class="p-4 text-right">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y-2 divide-black">
+                    <?php if (empty($requests)): ?>
+                        <tr>
+                            <td colspan="7" class="p-12 text-center font-bold text-gray-500 uppercase">No requests found.</td>
+                        </tr>
+                    <?php else: ?>
+                        <?php foreach($requests as $req):
+                            $year = date('Y', strtotime($req['created_at']));
+                            $refNum = sprintf("SPVAI-%s-%07d", $year, $req['request_id']);
+
+                            $statusColor = 'bg-gray-400';
+                            switch($req['status']) {
+                                case 'Pending': $statusColor = 'bg-amber-400'; break;
+                                case 'Approved': $statusColor = 'bg-blue-500'; break;
+                                case 'Processing': $statusColor = 'bg-indigo-500'; break;
+                                case 'Ready': $statusColor = 'bg-green-500'; break;
+                                case 'Completed': $statusColor = 'bg-green-800'; break;
+                                case 'Rejected': $statusColor = 'bg-red-500'; break;
+                                case 'Cancelled': $statusColor = 'bg-gray-400'; break;
+                            }
+                        ?>
+                            <tr class="hover:bg-gray-50 transition-colors">
+                                <td class="p-4 border-r-2 border-black font-black text-sm"><?= $refNum; ?></td>
+                                <td class="p-4 border-r-2 border-black font-bold text-sm"><?= htmlspecialchars($req['first_name'] . ' ' . $req['last_name']); ?></td>
+                                <td class="p-4 border-r-2 border-black font-medium text-sm"><?= htmlspecialchars($req['student_id']); ?></td>
+                                <td class="p-4 border-r-2 border-black font-bold text-sm"><?= htmlspecialchars($req['document_name']); ?></td>
+                                <td class="p-4 border-r-2 border-black text-center">
+                                    <span class="<?= $statusColor; ?> border-2 border-black text-white px-2 py-1 text-[10px] font-black uppercase inline-block">
+                                        <?= htmlspecialchars($req['status']); ?>
+                                    </span>
+                                </td>
+                                <td class="p-4 border-r-2 border-black text-sm font-medium"><?= date('M d, Y', strtotime($req['created_at'])); ?></td>
+                                <td class="p-4 text-right">
+                                    <a href="request_details.php?id=<?= $req['request_id']; ?>" class="px-3 py-2 border-2 border-black bg-white font-black text-[10px] uppercase shadow-brutal hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all">
+                                        Manage
+                                    </a>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            <div class="p-6 bg-gray-50 border-t-4 border-black flex justify-center gap-2">
+                <?php for($i=1; $i<=$totalPages; $i++): ?>
+                    <a href="?page=<?= $i; ?>&search=<?= urlencode($search); ?>&sort=<?= $sortBy; ?>&order=<?= $order; ?>"
+                       class="px-4 py-2 border-2 border-black font-black uppercase text-sm transition-all <?= $i == $page ? 'bg-brutal-yellow shadow-none' : 'bg-white shadow-brutal hover:shadow-none hover:translate-x-1 hover:translate-y-1' ?>">
+                        <?= $i; ?>
+                    </a>
+                <?php endfor; ?>
             </div>
         </div>
     </div>
 </div>
 
-<script src="../assets/js/jquery-3.1.1.min.js"></script>
-<script src="../assets/js/bootstrap.min.js"></script>
-</body>
-</html>
+<?php require_once('layouts/admin_footer.php'); ?>

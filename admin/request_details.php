@@ -1,8 +1,5 @@
 <?php
-require_once('../class/Auth.php');
-
-// Ensure only admins can access
-$auth->requireRole('admin');
+require_once('layouts/admin_header.php');
 
 $requestId = $_GET['id'] ?? null;
 
@@ -36,154 +33,170 @@ $payment = $auth->getRow($paySql, [$requestId]);
 $year = date('Y', strtotime($request['created_at']));
 $refNumber = sprintf("SPVAI-%s-%07d", $year, $requestId);
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link class="icon" rel="icon" type="images/x-icon" href="images/spvai.ico">
-    <title>Manage Request - SPVAI Admin</title>
-    <link rel="stylesheet" type="text/css" href="../assets/css/bootstrap.min.css">
-    <link rel="stylesheet" type="text/css" href="../assets/css/bootstrap-theme.min.css">
-</head>
-<body style="background-color: #f4f7f6;">
 
-<nav class="navbar navbar-inverse">
-    <div class="container-fluid">
-        <div class="navbar-header">
-            <a class="navbar-brand" href="#">SPVAI Admin</a>
+<div class="max-w-6xl mx-auto">
+    <header class="mb-12 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+            <h1 class="text-5xl font-black uppercase tracking-tighter mb-2">Manage Request</h1>
+            <p class="text-lg font-bold text-gray-600 uppercase tracking-wide"><?= $refNumber; ?></p>
         </div>
-        <ul class="nav navbar-nav">
-            <li><a href="dashboard.php">Dashboard</a></li>
-            <li class="active"><a href="requests.php">Requests</a></li>
-            <li><a href="appointments.php">Appointments</a></li>
-            <li><a href="payments.php">Payments</a></li>
-        </ul>
-        <ul class="nav navbar-nav navbar-right">
-            <li><a href="../logout.php"><span class="glyphicon glyphicon-log-out"></span> Logout</a></li>
-        </ul>
-    </div>
-</nav>
+        <a href="requests.php" class="px-4 py-2 border-2 border-black bg-white font-black text-xs uppercase shadow-brutal hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all">
+            ← Back to Requests
+        </a>
+    </header>
 
-<div class="container">
-    <div class="row">
-        <div class="col-md-12">
-            <h2 class="page-header">Request Details: <?= $refNumber; ?></h2>
-        </div>
-    </div>
-
-    <div class="row">
-        <div class="col-md-4">
-            <!-- Student Info -->
-            <div class="panel panel-default">
-                <div class="panel-heading"><strong>Student Information</strong></div>
-                <div class="panel-body">
-                    <p><strong>ID:</strong> <?= htmlspecialchars($request['student_id']); ?></p>
-                    <p><strong>Name:</strong> <?= htmlspecialchars($request['first_name'] . ' ' . $request['last_name']); ?></p>
-                    <p><strong>Email:</strong> <?= htmlspecialchars($request['email']); ?></p>
-                    <p><strong>Phone:</strong> <?= htmlspecialchars($request['phone'] ?? 'N/A'); ?></p>
-                </div>
-            </div>
-
-            <!-- Payment Info -->
-            <div class="panel panel-default">
-                <div class="panel-heading"><strong>Payment Status</strong></div>
-                <div class="panel-body">
-                    <?php if ($payment): ?>
-                        <p><strong>Amount:</strong> ₱<?= number_format($payment['amount'], 2); ?></p>
-                        <p><strong>Method:</strong> <?= htmlspecialchars($payment['payment_method']); ?></p>
-                        <p><strong>Reference:</strong> <?= htmlspecialchars($payment['reference_number']); ?></p>
-                        <p><strong>Status:</strong> <span class="label label-info"><?= htmlspecialchars($payment['payment_status']); ?></span></p>
-                        <p><strong>Verified By:</strong> <?= htmlspecialchars($payment['verified_by'] ?? 'N/A'); ?></p>
-                    <?php else: ?>
-                        <p class="text-muted">No payment record found.</p>
-                    <?php endif; ?>
-                    <a href="payments.php?request_id=<?= $requestId; ?>" class="btn btn-xs btn-default">View All Payments</a>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-8">
-            <!-- Request Details -->
-            <div class="panel panel-primary">
-                <div class="panel-heading"><strong>Document Request Details</strong></div>
-                <div class="panel-body">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <p><strong>Document:</strong> <?= htmlspecialchars($request['document_name']); ?></p>
-                            <p><strong>Copies:</strong> <?= htmlspecialchars($request['copies']); ?></p>
-                            <p><strong>Date Submitted:</strong> <?= date('M d, Y h:i A', strtotime($request['created_at'])); ?></p>
-                        </div>
-                        <div class="col-md-6">
-                            <p><strong>Status:</strong> <span class="label label-warning"><?= htmlspecialchars($request['status']); ?></span></p>
-                            <p><strong>Purpose:</strong><br><em><?= nl2br(htmlspecialchars($request['purpose'])); ?></em></p>
-                        </div>
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <!-- Left Column: Student & Payment -->
+        <div class="space-y-8">
+            <div class="bg-white border-4 border-black shadow-brutal-lg p-6">
+                <h2 class="text-xl font-black uppercase mb-6 border-b-4 border-black pb-2">Student Information</h2>
+                <div class="space-y-4">
+                    <div>
+                        <p class="text-xs font-black uppercase text-gray-500">Student ID</p>
+                        <p class="text-lg font-bold"><?= htmlspecialchars($request['student_id']); ?></p>
                     </div>
-                    <hr>
-                    <div class="form-group">
-                        <label><strong>Admin Remarks:</strong></label>
-                        <textarea class="form-control" id="admin-remarks" rows="3"><?= htmlspecialchars($request['remarks'] ?? ''); ?></textarea>
+                    <div>
+                        <p class="text-xs font-black uppercase text-gray-500">Full Name</p>
+                        <p class="text-lg font-bold"><?= htmlspecialchars($request['first_name'] . ' ' . $request['last_name']); ?></p>
+                    </div>
+                    <div>
+                        <p class="text-xs font-black uppercase text-gray-500">Email</p>
+                        <p class="text-lg font-bold"><?= htmlspecialchars($request['email']); ?></p>
+                    </div>
+                    <div>
+                        <p class="text-xs font-black uppercase text-gray-500">Phone</p>
+                        <p class="text-lg font-bold"><?= htmlspecialchars($request['phone'] ?? 'N/A'); ?></p>
                     </div>
                 </div>
             </div>
 
-            <!-- Appointment Info -->
-            <div class="panel panel-default">
-                <div class="panel-heading"><strong>Appointment</strong></div>
-                <div class="panel-body">
-                    <?php if ($appointment): ?>
-                        <div class="row">
-                            <div class="col-md-6">
-                                <p><strong>Date:</strong> <?= date('F j, Y', strtotime($appointment['appointment_date'])); ?></p>
-                                <p><strong>Time:</strong> <?= date('h:i A', strtotime($appointment['appointment_time'])); ?></p>
-                            </div>
-                            <div class="col-md-6">
-                                <p><strong>Status:</strong> <span class="label label-info"><?= htmlspecialchars($appointment['status']); ?></span></p>
-                                <p><strong>Remarks:</strong> <?= htmlspecialchars($appointment['remarks'] ?? 'N/A'); ?></p>
-                            </div>
+            <div class="bg-white border-4 border-black shadow-brutal-lg p-6">
+                <h2 class="text-xl font-black uppercase mb-6 border-b-4 border-black pb-2">Payment Status</h2>
+                <?php if ($payment): ?>
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center">
+                            <p class="text-xs font-black uppercase text-gray-500">Amount</p>
+                            <p class="text-lg font-black">₱<?= number_format($payment['amount'], 2); ?></p>
                         </div>
-                    <?php else: ?>
-                        <p class="text-muted">No appointment scheduled for this request.</p>
-                    <?php endif; ?>
+                        <div class="flex justify-between items-center">
+                            <p class="text-xs font-black uppercase text-gray-500">Method</p>
+                            <p class="text-sm font-bold"><?= htmlspecialchars($payment['payment_method']); ?></p>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <p class="text-xs font-black uppercase text-gray-500">Reference</p>
+                            <p class="text-sm font-bold"><?= htmlspecialchars($payment['reference_number']); ?></p>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <p class="text-xs font-black uppercase text-gray-500">Status</p>
+                            <span class="border-2 border-black px-2 py-0.5 text-[10px] font-black uppercase <?= $payment['payment_status'] == 'Paid' ? 'bg-green-500 text-white' : ($payment['payment_status'] == 'Pending Verification' ? 'bg-amber-400' : 'bg-red-500 text-white'); ?>">
+                                <?= htmlspecialchars($payment['payment_status']); ?>
+                            </span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <p class="text-xs font-black uppercase text-gray-500">Verified By</p>
+                            <p class="text-sm font-bold"><?= htmlspecialchars($payment['verified_by'] ?? 'N/A'); ?></p>
+                        </div>
+                    </div>
+                <?php else: ?>
+                    <p class="text-sm italic text-gray-500">No payment record found for this request.</p>
+                <?php endif; ?>
+                <a href="payments.php?request_id=<?= $requestId; ?>" class="block mt-6 text-center py-2 border-2 border-black bg-white font-black uppercase text-xs shadow-brutal hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all">
+                    View All Payments
+                </a>
+            </div>
+        </div>
+
+        <!-- Right Column: Request, Appointment, Status -->
+        <div class="lg:col-span-2 space-y-8">
+            <div class="bg-white border-4 border-black shadow-brutal-lg p-6">
+                <h2 class="text-xl font-black uppercase mb-6 border-b-4 border-black pb-2">Request Details</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="space-y-1">
+                        <p class="text-xs font-black uppercase text-gray-500">Document</p>
+                        <p class="text-lg font-bold"><?= htmlspecialchars($request['document_name']); ?></p>
+                    </div>
+                    <div class="space-y-1">
+                        <p class="text-xs font-black uppercase text-gray-500">Copies</p>
+                        <p class="text-lg font-bold"><?= htmlspecialchars($request['copies']); ?></p>
+                    </div>
+                    <div class="space-y-1">
+                        <p class="text-xs font-black uppercase text-gray-500">Date Submitted</p>
+                        <p class="text-lg font-bold"><?= date('M d, Y h:i A', strtotime($request['created_at'])); ?></p>
+                    </div>
+                    <div class="space-y-1">
+                        <p class="text-xs font-black uppercase text-gray-500">Current Status</p>
+                        <span class="inline-block border-2 border-black px-2 py-1 text-[10px] font-black uppercase <?= $request['status'] == 'Ready' ? 'bg-green-500 text-white' : ($request['status'] == 'Pending' ? 'bg-amber-400' : 'bg-gray-200'); ?>">
+                            <?= htmlspecialchars($request['status']); ?>
+                        </span>
+                    </div>
+                    <div class="md:col-span-2 space-y-1">
+                        <p class="text-xs font-black uppercase text-gray-500">Purpose</p>
+                        <p class="text-lg font-medium leading-relaxed italic">"<?= nl2br(htmlspecialchars($request['purpose'])); ?>"</p>
+                    </div>
                 </div>
             </div>
 
-            <!-- Action Panel -->
-            <div class="panel panel-default">
-                <div class="panel-heading"><strong>Manage Request Status</strong></div>
-                <div class="panel-body">
-                    <form id="form-update-status">
-                        <input type="hidden" name="request_id" value="<?= $requestId; ?>">
-                        <input type="hidden" name="csrf_token" value="<?= $auth->generateCsrfToken(); ?>">
-
-                        <div class="row">
-                            <div class="col-md-6">
-                                <label>Update Status:</label>
-                                <select name="status" class="form-control">
-                                    <option value="Pending" <?= $request['status'] == 'Pending' ? 'selected' : ''; ?>>Pending</option>
-                                    <option value="Approved" <?= $request['status'] == 'Approved' ? 'selected' : ''; ?>>Approved</option>
-                                    <option value="Rejected" <?= $request['status'] == 'Rejected' ? 'selected' : ''; ?>>Rejected</option>
-                                    <option value="Processing" <?= $request['status'] == 'Processing' ? 'selected' : ''; ?>>Processing</option>
-                                    <option value="Ready" <?= $request['status'] == 'Ready' ? 'selected' : ''; ?>>Ready</option>
-                                    <option value="Completed" <?= $request['status'] == 'Completed' ? 'selected' : ''; ?>>Completed</option>
-                                    <option value="Cancelled" <?= $request['status'] == 'Cancelled' ? 'selected' : ''; ?>>Cancelled</option>
-                                </select>
-                            </div>
-                            <div class="col-md-6">
-                                <label>&nbsp;</label><br>
-                                <button type="submit" class="btn btn-primary btn-block">Update Request</button>
-                            </div>
+            <div class="bg-white border-4 border-black shadow-brutal-lg p-6">
+                <h2 class="text-xl font-black uppercase mb-6 border-b-4 border-black pb-2">Appointment</h2>
+                <?php if ($appointment): ?>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="space-y-1">
+                            <p class="text-xs font-black uppercase text-gray-500">Scheduled Date & Time</p>
+                            <p class="text-lg font-bold"><?= date('F j, Y', strtotime($appointment['appointment_date'])); ?> at <?= date('h:i A', strtotime($appointment['appointment_time'])); ?></p>
                         </div>
-                    </form>
-                </div>
+                        <div class="space-y-1">
+                            <p class="text-xs font-black uppercase text-gray-500">Status</p>
+                            <span class="inline-block border-2 border-black px-2 py-1 text-[10px] font-black uppercase bg-blue-500 text-white">
+                                <?= htmlspecialchars($appointment['status']); ?>
+                            </span>
+                        </div>
+                        <div class="md:col-span-2 space-y-1">
+                            <p class="text-xs font-black uppercase text-gray-500">Appointment Remarks</p>
+                            <p class="text-sm font-medium"><?= htmlspecialchars($appointment['remarks'] ?? 'No remarks.'); ?></p>
+                        </div>
+                    </div>
+                <?php else: ?>
+                    <p class="text-sm italic text-gray-500">No appointment scheduled for this request.</p>
+                <?php endif; ?>
+            </div>
+
+            <div class="bg-white border-4 border-black shadow-brutal-lg p-6">
+                <h2 class="text-xl font-black uppercase mb-6 border-b-4 border-black pb-2">Admin Management</h2>
+                <form id="form-update-status" class="space-y-6">
+                    <input type="hidden" name="request_id" value="<?= $requestId; ?>">
+                    <input type="hidden" name="csrf_token" value="<?= $auth->generateCsrfToken(); ?>">
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="space-y-1">
+                            <label class="block text-xs font-black uppercase">Update Status</label>
+                            <select name="status" class="w-full border-2 border-black p-3 rounded-none focus:outline-none focus:ring-2 focus:ring-black font-bold">
+                                <option value="Pending" <?= $request['status'] == 'Pending' ? 'selected' : ''; ?>>Pending</option>
+                                <option value="Approved" <?= $request['status'] == 'Approved' ? 'selected' : ''; ?>>Approved</option>
+                                <option value="Rejected" <?= $request['status'] == 'Rejected' ? 'selected' : ''; ?>>Rejected</option>
+                                <option value="Processing" <?= $request['status'] == 'Processing' ? 'selected' : ''; ?>>Processing</option>
+                                <option value="Ready" <?= $request['status'] == 'Ready' ? 'selected' : ''; ?>>Ready</option>
+                                <option value="Completed" <?= $request['status'] == 'Completed' ? 'selected' : ''; ?>>Completed</option>
+                                <option value="Cancelled" <?= $request['status'] == 'Cancelled' ? 'selected' : ''; ?>>Cancelled</option>
+                            </select>
+                        </div>
+                        <div class="flex items-end">
+                            <button type="submit" class="w-full py-3 bg-black text-white border-2 border-black font-black uppercase text-sm shadow-brutal hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all">
+                                Update Request
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="space-y-1">
+                        <label class="block text-xs font-black uppercase">Admin Remarks</label>
+                        <textarea id="admin-remarks" class="w-full border-2 border-black p-3 rounded-none focus:outline-none focus:ring-2 focus:ring-black font-medium" rows="3"><?= htmlspecialchars($request['remarks'] ?? ''); ?></textarea>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
 </div>
 
-<script src="../assets/js/jquery-3.1.1.min.js"></script>
-<script src="../assets/js/bootstrap.min.js"></script>
+<?php require_once('layouts/admin_footer.php'); ?>
 <script>
 $(document).on('submit', '#form-update-status', function(e) {
     e.preventDefault();
@@ -214,5 +227,3 @@ $(document).on('submit', '#form-update-status', function(e) {
     });
 });
 </script>
-</body>
-</html>

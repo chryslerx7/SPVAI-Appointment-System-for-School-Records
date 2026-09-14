@@ -1,8 +1,5 @@
 <?php
-require_once('class/Auth.php');
-
-// Require student login
-$auth->requireRole('student');
+require_once('layouts/student_header.php');
 
 $requestId = $_GET['id'] ?? null;
 
@@ -20,7 +17,6 @@ $sql = "SELECT r.*, dt.document_name, dt.fee
 $request = $auth->getRow($sql, [$requestId, $_SESSION['user_id']]);
 
 if (!$request) {
-    // Request not found or doesn't belong to user
     header("Location: my_requests.php?error=unauthorized");
     exit();
 }
@@ -28,118 +24,131 @@ if (!$request) {
 // Generate Reference Number
 $year = date('Y', strtotime($request['created_at']));
 $refNumber = sprintf("SPVAI-%s-%07d", $year, $requestId);
+
+// Status Logic for Timeline
+$statuses = ['Pending', 'Approved', 'Processing', 'Ready', 'Completed'];
+$currentStatus = $request['status'];
+$currentIndex = array_search($currentStatus, $statuses);
+if ($currentIndex === false) {
+    // Handle Rejected/Cancelled outside the linear flow
+    $currentIndex = -1;
+}
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link class="icon" rel="icon" type="images/x-icon" href="images/spvai.ico">
-    <title>Request Details - SPVAI Records Office</title>
-    <link rel="stylesheet" type="text/css" href="assets/css/bootstrap.min.css">
-    <link rel="stylesheet" type="text/css" href="assets/css/bootstrap-theme.min.css">
-</head>
-<body style="background-color: lightblue;">
 
-<nav class="navbar navbar-inverse">
-    <div class="container-fluid">
-        <div class="navbar-header">
-            <a class="navbar-brand" href="index.php">SPVAIRecordsOffice</a>
+<div class="max-w-4xl mx-auto">
+    <header class="mb-12 flex justify-between items-end">
+        <div>
+            <h1 class="text-5xl font-black uppercase tracking-tighter mb-2">Request Details</h1>
+            <p class="text-lg font-bold text-gray-600 uppercase tracking-wide"><?= $refNumber; ?></p>
         </div>
-        <ul class="nav navbar-nav">
-            <li><a href="student_area.php">Dashboard</a></li>
-            <li><a href="request_document.php">Request Document</a></li>
-            <li class="active"><a href="my_requests.php">My Requests</a></li>
-        </ul>
-        <ul class="nav navbar-nav navbar-right">
-            <li><a href="logout.php"><span class="glyphicon glyphicon-log-out"></span> Logout</a></li>
-        </ul>
-    </div>
-</nav>
+        <a href="my_requests.php" class="px-4 py-2 border-2 border-black bg-white font-black text-xs uppercase shadow-brutal hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all">
+            ← Back to List
+        </a>
+    </header>
 
-<div class="container">
-    <div class="row">
-        <div class="col-md-6 col-md-offset-3">
-            <div class="panel panel-default">
-                <div class="panel-heading">
-                    <h3 class="panel-title">Request Details: <?= $refNumber; ?></h3>
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <!-- Main Details -->
+        <div class="lg:col-span-2 space-y-8">
+            <div class="bg-white border-4 border-black shadow-brutal-lg p-6">
+                <h2 class="text-xl font-black uppercase mb-6 border-b-4 border-black pb-2">Document Information</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="space-y-1">
+                        <p class="text-xs font-black uppercase text-gray-500">Document Type</p>
+                        <p class="text-lg font-bold"><?= htmlspecialchars($request['document_name']); ?></p>
+                    </div>
+                    <div class="space-y-1">
+                        <p class="text-xs font-black uppercase text-gray-500">Submission Date</p>
+                        <p class="text-lg font-bold"><?= date('M d, Y h:i A', strtotime($request['created_at'])); ?></p>
+                    </div>
+                    <div class="md:col-span-2 space-y-1">
+                        <p class="text-xs font-black uppercase text-gray-500">Purpose</p>
+                        <p class="text-lg font-medium leading-relaxed"><?= nl2br(htmlspecialchars($request['purpose'])); ?></p>
+                    </div>
+                    <div class="space-y-1">
+                        <p class="text-xs font-black uppercase text-gray-500">Copies</p>
+                        <p class="text-lg font-bold"><?= htmlspecialchars($request['copies']); ?> Copy/ies</p>
+                    </div>
+                    <div class="space-y-1">
+                        <p class="text-xs font-black uppercase text-gray-500">Total Fee</p>
+                        <p class="text-lg font-black text-green-700">₱<?= number_format($request['fee'] ?? 0, 2); ?></p>
+                    </div>
                 </div>
-                <div class="panel-body">
-                    <table class="table table-bordered">
-                        <tr>
-                            <th class="info">Document</th>
-                            <td><strong><?= htmlspecialchars($request['document_name']); ?></strong></td>
-                        </tr>
-                        <tr>
-                            <th class="info">Reference Number</th>
-                            <td><?= $refNumber; ?></td>
-                        </tr>
-                        <tr>
-                            <th class="info">Purpose</th>
-                            <td><?= nl2br(htmlspecialchars($request['purpose'])); ?></td>
-                        </tr>
-                        <tr>
-                            <th class="info">Number of Copies</th>
-                            <td><?= htmlspecialchars($request['copies']); ?></td>
-                        </tr>
-                        <tr>
-                            <th class="info">Submission Date</th>
-                            <td><?= date('M d, Y h:i A', strtotime($request['created_at'])); ?></td>
-                        </tr>
-                        <tr>
-                            <th class="info">Current Status</th>
-                            <td>
-                                <?php
-                                    $status = $request['status'];
-                                    $label = 'label-default';
-                                    switch($status) {
-                                        case 'Pending': $label = 'label-warning'; break;
-                                        case 'Approved': $label = 'label-info'; break;
-                                        case 'Processing': $label = 'label-primary'; break;
-                                        case 'Ready': $label = 'label-success'; break;
-                                        case 'Completed': $label = 'label-success'; break;
-                                        case 'Rejected': $label = 'label-danger'; break;
-                                        case 'Cancelled': $label = 'label-default'; break;
-                                    }
-                                ?>
-                                <span class="label <?= $label; ?>"><?= htmlspecialchars($status); ?></span>
-                            </td>
-                        </tr>
-                        <tr>
-                            <th class="info">Appointment</th>
-                            <td>
-                                <?php
-                                    $appSql = "SELECT * FROM appointments WHERE request_id = ? AND status != 'Cancelled' LIMIT 1";
-                                    $appointment = $auth->getRow($appSql, [$requestId]);
-                                    if ($appointment): ?>
-                                        <strong><?= date('F j, Y', strtotime($appointment['appointment_date'])); ?></strong> at
-                                        <strong><?= date('h:i A', strtotime($appointment['appointment_time'])); ?></strong>
-                                        <span class="label label-info"><?= htmlspecialchars($appointment['status']); ?></span>
-                                    <?php else: ?>
-                                        No appointment scheduled.
-                                    <?php endif; ?>
-                                </td>
-                        </tr>
-                        <tr>
-                            <th class="info">Admin Remarks</th>
-                            <td><?= !empty($request['remarks']) ? htmlspecialchars($request['remarks']) : 'No remarks yet.'; ?></td>
-                        </tr>
-                    </table>
+            </div>
 
-                    <div class="text-center">
-                        <a href="my_requests.php" class="btn btn-default">Back to My Requests</a>
+            <div class="bg-white border-4 border-black shadow-brutal-lg p-6">
+                <h2 class="text-xl font-black uppercase mb-6 border-b-4 border-black pb-2">Appointment & Remarks</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div class="space-y-3">
+                        <p class="text-xs font-black uppercase text-gray-500">Scheduled Appointment</p>
+                        <?php
+                            $appSql = "SELECT * FROM appointments WHERE request_id = ? AND status != 'Cancelled' LIMIT 1";
+                            $appointment = $auth->getRow($appSql, [$requestId]);
+                            if ($appointment): ?>
+                                <div class="p-4 border-2 border-black bg-gray-50">
+                                    <p class="font-black text-lg"><?= date('F j, Y', strtotime($appointment['appointment_date'])); ?></p>
+                                    <p class="font-bold text-gray-600"><?= date('h:i A', strtotime($appointment['appointment_time'])); ?></p>
+                                    <span class="inline-block mt-2 px-2 py-1 border-2 border-black bg-blue-500 text-white text-[10px] font-black uppercase">
+                                        <?= htmlspecialchars($appointment['status']); ?>
+                                    </span>
+                                </div>
+                            <?php else: ?>
+                                <p class="text-sm italic text-gray-500">No appointment scheduled.</p>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <div class="space-y-3">
+                        <p class="text-xs font-black uppercase text-gray-500">Office Remarks</p>
+                        <div class="p-4 border-2 border-black bg-gray-50 min-h-[80px]">
+                            <p class="text-sm font-medium italic">
+                                <?= !empty($request['remarks']) ? htmlspecialchars($request['remarks']) : 'No remarks provided yet.'; ?>
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
-</div>
 
-<style>
-    .info { width: 40%; background-color: #f9f9f9; }
-</style>
-<script src="assets/js/jquery-3.1.1.min.js"></script>
-<script src="assets/js/bootstrap.min.js"></script>
-</body>
-</html>
+        <!-- Sidebar: Status Tracker -->
+        <div class="lg:col-span-1">
+            <div class="bg-white border-4 border-black shadow-brutal-lg p-6 sticky top-6">
+                <h2 class="text-xl font-black uppercase mb-6 border-b-4 border-black pb-2">Request Status</h2>
+
+                <?php if ($currentIndex === -1): ?>
+                    <div class="text-center p-6 border-4 border-red-500 bg-red-50">
+                        <p class="text-red-600 font-black uppercase text-lg"><?= $currentStatus; ?></p>
+                        <p class="text-xs text-red-500 font-bold">This request is no longer active.</p>
+                    </div>
+                <?php else: ?>
+                    <div class="relative space-y-8">
+                        <?php foreach($statuses as $index => $status):
+                            $isCompleted = $index <= $currentIndex;
+                            $isCurrent = $index === $currentIndex;
+                            $color = $isCompleted ? 'bg-green-500' : 'bg-gray-200';
+                            if ($isCurrent) $color = 'bg-brutal-yellow';
+                        ?>
+                            <div class="flex items-center gap-4 relative">
+                                <?php if($index > 0): ?>
+                                    <div class="absolute -top-8 left-4 w-0.5 h-8 <?= $isCompleted ? 'bg-green-500' : 'bg-gray-200' ?>"></div>
+                                <?php endif; ?>
+
+                                <div class="w-8 h-8 border-2 border-black rounded-none flex items-center justify-center z-10 <?= $color ?> shadow-brutal">
+                                    <?php if($isCompleted): ?>
+                                        <span class="text-black font-black text-xs">✓</span>
+                                    <?php else: ?>
+                                        <span class="text-black font-black text-xs"><?= $index + 1; ?></span>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="flex-1">
+                                    <p class="text-xs font-black uppercase <?= $isCurrent ? 'text-black' : 'text-gray-400' ?> <?= $isCurrent ? 'underline decoration-4' : '' ?>">
+                                        <?= $status; ?>
+                                    </p>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+
+<?php require_once('layouts/student_footer.php'); ?>

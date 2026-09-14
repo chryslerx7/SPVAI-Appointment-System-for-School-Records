@@ -1,8 +1,5 @@
 <?php
-require_once('../class/Auth.php');
-
-// Ensure only admins can access
-$auth->requireRole('admin');
+require_once('layouts/admin_header.php');
 
 // 1. Fetch Statistics
 // Pending Requests
@@ -24,117 +21,58 @@ $todayApps = $auth->getRow("SELECT COUNT(*) as count FROM appointments WHERE app
 // Pending Payments
 $pendingPayments = $auth->getRow("SELECT COUNT(*) as count FROM payments WHERE payment_status = 'Pending Verification'");
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link class="icon" rel="icon" type="images/x-icon" href="images/spvai.ico">
-    <title>Admin Dashboard - SPVAI Records Office</title>
-    <link rel="stylesheet" type="text/css" href="../assets/css/bootstrap.min.css">
-    <link rel="stylesheet" type="text/css" href="../assets/css/bootstrap-theme.min.css">
-    <style>
-        .stat-card {
-            padding: 20px;
-            border-radius: 5px;
-            color: white;
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        .stat-count {
-            font-size: 32px;
-            font-weight: bold;
-            display: block;
-        }
-        .stat-label {
-            font-size: 14px;
-            text-transform: uppercase;
-        }
-    </style>
-</head>
-<body style="background-color: #f4f7f6;">
 
-<nav class="navbar navbar-inverse">
-    <div class="container-fluid">
-        <div class="navbar-header">
-            <a class="navbar-brand" href="#">SPVAI Admin</a>
+<div class="max-w-6xl mx-auto">
+    <header class="mb-12">
+        <h1 class="text-5xl font-black uppercase tracking-tighter mb-2">Office Overview</h1>
+        <p class="text-lg font-bold text-gray-600 uppercase tracking-wide">System-wide records and request status.</p>
+    </header>
+
+    <!-- Stats Grid -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 mb-12">
+        <div class="bg-white border-4 border-black shadow-brutal p-6 text-center">
+            <p class="text-xs font-black uppercase text-gray-500 mb-2">Pending Requests</p>
+            <p class="text-5xl font-black"><?= $pendingReqs['count'] ?? 0; ?></p>
         </div>
-        <ul class="nav navbar-nav">
-            <li class="active"><a href="dashboard.php">Dashboard</a></li>
-            <li><a href="requests.php">Requests</a></li>
-            <li><a href="appointments.php">Appointments</a></li>
-            <li><a href="payments.php">Payments</a></li>
-        </ul>
-        <ul class="nav navbar-nav navbar-right">
-            <li><a href="../logout.php"><span class="glyphicon glyphicon-log-out"></span> Logout</a></li>
-        </ul>
-    </div>
-</nav>
-
-<div class="container">
-    <div class="row">
-        <div class="col-md-12">
-            <h2 class="page-header">Records Office Overview</h2>
+        <div class="bg-white border-4 border-black shadow-brutal p-6 text-center">
+            <p class="text-xs font-black uppercase text-gray-500 mb-2">Approved Requests</p>
+            <p class="text-5xl font-black"><?= $approvedReqs['count'] ?? 0; ?></p>
+        </div>
+        <div class="bg-white border-4 border-black shadow-brutal p-6 text-center">
+            <p class="text-xs font-black uppercase text-gray-500 mb-2">Rejected Requests</p>
+            <p class="text-5xl font-black"><?= $rejectedReqs['count'] ?? 0; ?></p>
+        </div>
+        <div class="bg-brutal-yellow border-4 border-black shadow-brutal p-6 text-center">
+            <p class="text-xs font-black uppercase text-gray-800 mb-2">Total Scheduled</p>
+            <p class="text-5xl font-black"><?= $scheduledApps['count'] ?? 0; ?></p>
         </div>
     </div>
 
-    <div class="row">
-        <div class="col-md-3">
-            <div class="stat-card" style="background-color: #f0ad4e;">
-                <span class="stat-count"><?= $pendingReqs['count'] ?? 0; ?></span>
-                <span class="stat-label">Pending Requests</span>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-12">
+        <!-- Today's Appointments -->
+        <div class="bg-white border-4 border-black shadow-brutal-lg p-8 flex flex-col items-center text-center">
+            <h2 class="text-2xl font-black uppercase mb-6 border-b-4 border-black pb-2 w-full">Today's Appointments</h2>
+            <div class="my-8">
+                <span class="text-8xl font-black"><?= $todayApps['count'] ?? 0; ?></span>
+                <p class="text-sm font-bold text-gray-500 uppercase mt-2">Scheduled for Today</p>
             </div>
+            <a href="appointments.php" class="px-8 py-3 bg-black text-white border-2 border-black font-black uppercase text-sm shadow-brutal hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all">
+                View Schedule
+            </a>
         </div>
-        <div class="col-md-3">
-            <div class="stat-card" style="background-color: #5bc0de;">
-                <span class="stat-count"><?= $approvedReqs['count'] ?? 0; ?></span>
-                <span class="stat-label">Approved Requests</span>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="stat-card" style="background-color: #d9534f;">
-                <span class="stat-count"><?= $rejectedReqs['count'] ?? 0; ?></span>
-                <span class="stat-label">Rejected Requests</span>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="stat-card" style="background-color: #5cb85c;">
-                <span class="stat-count"><?= $scheduledApps['count'] ?? 0; ?></span>
-                <span class="stat-label">Total Scheduled</span>
-            </div>
-        </div>
-    </div>
 
-    <div class="row">
-        <div class="col-md-6">
-            <div class="panel panel-default">
-                <div class="panel-heading">
-                    <h3 class="panel-title">Today's Appointments</h3>
-                </div>
-                <div class="panel-body text-center">
-                    <span style="font-size: 48px; font-weight: bold;"><?= $todayApps['count'] ?? 0; ?></span>
-                    <p class="text-muted">Appointments scheduled for today</p>
-                    <a href="appointments.php" class="btn btn-primary">View All Appointments</a>
-                </div>
+        <!-- Payment Verification -->
+        <div class="bg-white border-4 border-black shadow-brutal-lg p-8 flex flex-col items-center text-center">
+            <h2 class="text-2xl font-black uppercase mb-6 border-b-4 border-black pb-2 w-full">Payment Verification</h2>
+            <div class="my-8">
+                <span class="text-8xl font-black text-red-600"><?= $pendingPayments['count'] ?? 0; ?></span>
+                <p class="text-sm font-bold text-gray-500 uppercase mt-2">Awaiting Verification</p>
             </div>
-        </div>
-        <div class="col-md-6">
-            <div class="panel panel-default">
-                <div class="panel-heading">
-                    <h3 class="panel-title">Payment Verification</h3>
-                </div>
-                <div class="panel-body text-center">
-                    <span style="font-size: 48px; font-weight: bold; color: #d9534f;"><?= $pendingPayments['count'] ?? 0; ?></span>
-                    <p class="text-muted">Payments awaiting verification</p>
-                    <a href="payments.php" class="btn btn-danger">Verify Payments</a>
-                </div>
-            </div>
+            <a href="payments.php" class="px-8 py-3 bg-red-500 text-white border-2 border-black font-black uppercase text-sm shadow-brutal hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all">
+                Verify Now
+            </a>
         </div>
     </div>
 </div>
 
-<script src="../assets/js/jquery-3.1.1.min.js"></script>
-<script src="../assets/js/bootstrap.min.js"></script>
-</body>
-</html>
+<?php require_once('layouts/admin_footer.php'); ?>

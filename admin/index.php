@@ -1,69 +1,68 @@
+<?php
+require_once('../class/Auth.php');
+?>
 <!DOCTYPE html>
-<html lang="">
+<html lang="en">
 <head>
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link class="icon" rel="icon" type="images/x-icon" href="images/spvai.ico">
-    <title>SPVAIRecordsOffice Admin</title>
-    <link rel="stylesheet" type="text/css" href="../assets/css/bootstrap.min.css">
-    <link rel="stylesheet" type="text/css" href="../assets/css/bootstrap-theme.min.css">
+    <title>Admin Login - SPVAI Records Office</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    boxShadow: {
+                        'brutal': '4px 4px 0px 0px rgba(0,0,0,1)',
+                        'brutal-lg': '8px 8px 0px 0px rgba(0,0,0,1)',
+                    },
+                    colors: {
+                        'brutal-yellow': '#FACC15',
+                        'brutal-bg': '#F9F9F9',
+                    }
+                }
+            }
+        }
+    </script>
 </head>
-<body>
-    <?php
-    require_once('../class/Auth.php');
-    ?>
-    <nav class="navbar navbar-inverse">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="#">SPVAI Admin</a>
-            <ul class="nav navbar-nav">
-                <li class="active"><a href="#">Admin Login</a></li>
-            </ul>
-            <ul class="nav navbar-nav navbar-right">
-                <li><a href="../"><span class="glyphicon glyphicon-backward"></span> Return Home</a></li>
-            </ul>
-        </div>
-    </nav>
+<body class="bg-brutal-bg min-h-screen flex items-center justify-center p-4 font-sans text-black">
 
-    <div class="col-md-3"></div>
-    <div class="col-md-6">
-        <div class="panel panel-success">
-            <div class="panel-heading">
-                <h3 class="panel-title">Please Login Here</h3>
+    <div class="w-full max-w-md">
+        <div class="bg-white border-4 border-black shadow-brutal-lg p-8">
+            <div class="text-center mb-8">
+                <h1 class="text-4xl font-black uppercase tracking-tighter mb-2">Admin Portal</h1>
+                <p class="text-sm font-bold uppercase tracking-widest text-gray-600">SPVAI Records Office Management</p>
             </div>
-            <div class="panel-body">
-                <form class="form-horizontal" role="form" id="form-login">
-                    <input type="hidden" name="csrf_token" value="<?= $auth->generateCsrfToken(); ?>">
-                    <div class="form-group">
-                        <label class="control-label col-sm-2" for="un">Username/Email:</label>
-                        <div class="col-sm-10">
-                            <input type="text" class="form-control" id="un" placeholder="Enter Username" autofocus="" required="">
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label class="control-label col-sm-2" for="pwd">Password:</label>
-                        <div class="col-sm-10">
-                            <input type="password" class="form-control" id="pwd" placeholder="Enter password" required="">
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <div class="col-sm-offset-2 col-sm-10">
-                            <button type="submit" class="btn btn-default">Login
-                                <span class="glyphicon glyphicon-check" aria-hidden="true"></span>
-                            </button>
-                        </div>
-                    </div>
-                </form>
-            </div>
+
+            <form id="form-login" class="space-y-6">
+                <input type="hidden" name="csrf_token" value="<?= $auth->generateCsrfToken(); ?>">
+
+                <div class="space-y-1">
+                    <label class="block text-xs font-black uppercase">Username / Email</label>
+                    <input type="text" id="un" name="un" class="w-full border-2 border-black p-3 rounded-none focus:outline-none focus:ring-2 focus:ring-black font-bold" required placeholder="admin@spvai.edu.ph">
+                </div>
+
+                <div class="space-y-1">
+                    <label class="block text-xs font-black uppercase">Password</label>
+                    <input type="password" id="pwd" name="pwd" class="w-full border-2 border-black p-3 rounded-none focus:outline-none focus:ring-2 focus:ring-black font-bold" required placeholder="••••••••">
+                </div>
+
+                <button type="submit" class="w-full bg-black text-white border-2 border-black py-3 font-black uppercase tracking-wide shadow-brutal hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all">
+                    Admin Login
+                </button>
+            </form>
+        </div>
+
+        <div class="mt-8 text-center">
+            <a href="../index.php" class="text-xs font-bold uppercase tracking-widest text-gray-500 hover:text-black transition-colors">← Return to Public Home</a>
         </div>
     </div>
-    <div class="col-md-3"></div>
 
-    <?php require_once('modal/message.php'); ?>
-
-    <script type="text/javascript" src="../assets/js/jquery-3.1.1.min.js"></script>
-    <script type="text/javascript" src="../assets/js/bootstrap.min.js"></script>
-    <script type="text/javascript">
+    <script src="../assets/js/jquery-3.1.1.min.js"></script>
+    <script src="../assets/js/bootstrap.min.js"></script>
+    <script>
         $(document).on('submit', '#form-login', function(event) {
             event.preventDefault();
             var formData = $(this).serialize();
@@ -77,8 +76,7 @@
                     if(data.valid == true){
                         window.location = data.url;
                     }else{
-                        $('#modal-message').find('#body-cont').text(data.msg);
-                        $('#modal-message').modal('show');
+                        alert(data.msg);
                         $('#un').val("");
                         $('#pwd').val("");
                         $('#un').focus();

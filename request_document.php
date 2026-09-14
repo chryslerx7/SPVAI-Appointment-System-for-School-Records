@@ -1,111 +1,81 @@
 <?php
-require_once('class/Auth.php');
-
-// Require student login
-$auth->requireRole('student');
+require_once('layouts/student_header.php');
 
 // Fetch active document types
 $sql = "SELECT * FROM document_types WHERE active = 1 ORDER BY document_name ASC";
 $documents = $auth->getRows($sql);
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link class="icon" rel="icon" type="images/x-icon" href="images/spvai.ico">
-    <title>Request Document - SPVAI Records Office</title>
-    <link rel="stylesheet" type="text/css" href="assets/css/bootstrap.min.css">
-    <link rel="stylesheet" type="text/css" href="assets/css/bootstrap-theme.min.css">
-</head>
-<body style="background-color: lightblue;">
 
-<nav class="navbar navbar-inverse">
-    <div class="container-fluid">
-        <div class="navbar-header">
-            <a class="navbar-brand" href="index.php">SPVAIRecordsOffice</a>
-        </div>
-        <ul class="nav navbar-nav">
-            <li><a href="student_area.php">Dashboard</a></li>
-            <li class="active"><a href="request_document.php">Request Document</a></li>
-            <li><a href="my_requests.php">My Requests</a></li>
-        </ul>
-        <ul class="nav navbar-nav navbar-right">
-            <li><a href="logout.php"><span class="glyphicon glyphicon-log-out"></span> Logout</a></li>
-        </ul>
-    </div>
-</nav>
+<div class="max-w-6xl mx-auto">
+    <header class="mb-12">
+        <h1 class="text-5xl font-black uppercase tracking-tighter mb-2">Request Document</h1>
+        <p class="text-lg font-bold text-gray-600 uppercase tracking-wide">Select a document from our official list to start your request.</p>
+    </header>
 
-<div class="container">
-    <div class="row">
-        <div class="col-md-8 col-md-offset-2">
-            <div class="panel panel-primary">
-                <div class="panel-heading">
-                    <h3 class="panel-title">Available Documents</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <?php foreach($documents as $doc): ?>
+            <div class="bg-white border-4 border-black shadow-brutal-lg p-6 flex flex-col">
+                <div class="mb-4">
+                    <h3 class="text-xl font-black uppercase mb-2"><?= htmlspecialchars($doc['document_name']); ?></h3>
+                    <p class="text-sm text-gray-600 mb-4"><?= htmlspecialchars($doc['description'] ?? 'No description available.'); ?></p>
                 </div>
-                <div class="panel-body">
-                    <div class="row">
-                        <?php foreach($documents as $doc): ?>
-                        <div class="col-md-6">
-                            <div class="panel panel-default" style="margin-bottom: 20px;">
-                                <div class="panel-heading">
-                                    <h4 class="panel-title"><?= htmlspecialchars($doc['document_name']); ?></h4>
-                                </div>
-                                <div class="panel-body">
-                                    <p><?= htmlspecialchars($doc['description'] ?? 'No description available.'); ?></p>
-                                    <p><strong>Processing:</strong> <?= htmlspecialchars($doc['processing_days']); ?> working days</p>
-                                    <p><strong>Fee:</strong> ₱<?= number_format($doc['fee'], 2); ?></p>
-                                    <button class="btn btn-info btn-block btn-request"
-                                            data-id="<?= $doc['document_id']; ?>"
-                                            data-name="<?= htmlspecialchars($doc['document_name']); ?>">
-                                        Request Document
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        <?php endforeach; ?>
+
+                <div class="mt-auto space-y-2 mb-6">
+                    <div class="flex justify-between text-xs font-black uppercase">
+                        <span>Processing Time:</span>
+                        <span><?= htmlspecialchars($doc['processing_days']); ?> Days</span>
+                    </div>
+                    <div class="flex justify-between text-xs font-black uppercase">
+                        <span>Fee:</span>
+                        <span class="text-lg font-black">₱<?= number_format($doc['fee'], 2); ?></span>
                     </div>
                 </div>
+
+                <button class="btn-request w-full bg-brutal-yellow border-2 border-black py-3 font-black uppercase tracking-wide shadow-brutal hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all"
+                        data-id="<?= $doc['document_id']; ?>"
+                        data-name="<?= htmlspecialchars($doc['document_name']); ?>">
+                    Request Now
+                </button>
             </div>
-        </div>
+        <?php endforeach; ?>
     </div>
 </div>
 
-<!-- Request Modal -->
-<div class="modal fade" id="modal-request" tabindex="-1" role="dialog">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-                <h4 class="modal-title">Document Request: <span id="doc-name-display"></span></h4>
-            </div>
-            <form id="form-request">
-                <div class="modal-body">
-                    <input type="hidden" name="document_id" id="input-doc-id">
-                    <input type="hidden" name="csrf_token" value="<?= $auth->generateCsrfToken(); ?>">
-
-                    <div class="form-group">
-                        <label for="purpose">Purpose of Request</label>
-                        <textarea name="purpose" id="purpose" class="form-control" rows="3" required placeholder="e.g., Scholarship application, Employment, etc."></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label for="copies">Number of Copies</label>
-                        <input type="number" name="copies" id="copies" class="form-control" min="1" max="10" value="1" required>
-                        <span class="help-block">Maximum 10 copies per request.</span>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Submit Request</button>
-                </div>
-            </form>
+<!-- Brutalist Modal -->
+<div id="modal-request" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50 backdrop-blur-sm">
+    <div class="bg-white border-4 border-black shadow-brutal-lg w-full max-w-md overflow-hidden">
+        <div class="p-6 border-b-4 border-black flex justify-between items-center bg-brutal-yellow">
+            <h4 class="text-xl font-black uppercase tracking-tighter">Request: <span id="doc-name-display" class="text-black"></span></h4>
+            <button class="close-modal text-2xl font-black leading-none hover:text-red-500">&times;</button>
         </div>
+        <form id="form-request" class="p-6 space-y-6">
+            <input type="hidden" name="document_id" id="input-doc-id">
+            <input type="hidden" name="csrf_token" value="<?= $auth->generateCsrfToken(); ?>">
+
+            <div class="space-y-1">
+                <label class="block text-xs font-black uppercase">Purpose of Request</label>
+                <textarea name="purpose" id="purpose" class="w-full border-2 border-black p-3 rounded-none focus:outline-none focus:ring-2 focus:ring-black" rows="3" required placeholder="e.g., Scholarship application, Employment, etc."></textarea>
+            </div>
+
+            <div class="space-y-1">
+                <label class="block text-xs font-black uppercase">Number of Copies</label>
+                <input type="number" name="copies" id="copies" class="w-full border-2 border-black p-3 rounded-none focus:outline-none focus:ring-2 focus:ring-black" min="1" max="10" value="1" required>
+                <p class="text-[10px] font-bold text-gray-500 uppercase">Maximum 10 copies per request.</p>
+            </div>
+
+            <div class="flex gap-4">
+                <button type="button" class="close-modal flex-1 py-3 border-2 border-black font-black uppercase text-sm shadow-brutal hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all">
+                    Cancel
+                </button>
+                <button type="submit" class="flex-1 py-3 bg-brutal-yellow border-2 border-black font-black uppercase text-sm shadow-brutal hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all">
+                    Submit Request
+                </button>
+            </div>
+        </form>
     </div>
 </div>
 
-<script src="assets/js/jquery-3.1.1.min.js"></script>
-<script src="assets/js/bootstrap.min.js"></script>
+<?php require_once('layouts/student_footer.php'); ?>
 <script>
 $(document).on('click', '.btn-request', function() {
     var docId = $(this).data('id');
@@ -113,7 +83,11 @@ $(document).on('click', '.btn-request', function() {
 
     $('#input-doc-id').val(docId);
     $('#doc-name-display').text(docName);
-    $('#modal-request').modal('show');
+    $('#modal-request').removeClass('hidden');
+});
+
+$(document).on('click', '.close-modal', function() {
+    $('#modal-request').addClass('hidden');
 });
 
 $(document).on('submit', '#form-request', function(e) {
@@ -144,5 +118,3 @@ $(document).on('submit', '#form-request', function(e) {
     });
 });
 </script>
-</body>
-</html>

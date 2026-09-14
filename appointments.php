@@ -1,13 +1,10 @@
 <?php
-require_once('class/Auth.php');
-
-// Require student login
-$auth->requireRole('student');
+require_once('layouts/student_header.php');
 
 $requestId = $_GET['id'] ?? null;
 
 if (!$requestId) {
-    header("Location: my_requests.php?error=no_request");
+    echo "<script>window.location='my_requests.php?error=no_request';</script>";
     exit();
 }
 
@@ -19,7 +16,7 @@ $sql = "SELECT r.*, dt.document_name
 $request = $auth->getRow($sql, [$requestId, $_SESSION['user_id']]);
 
 if (!$request) {
-    header("Location: my_requests.php?error=unauthorized");
+    echo "<script>window.location='my_requests.php?error=unauthorized';</script>";
     exit();
 }
 
@@ -39,81 +36,56 @@ if (in_array($request['status'], $forbiddenStatuses)) {
     exit();
 }
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link class="icon" rel="icon" type="images/x-icon" href="images/spvai.ico">
-    <title>Schedule Appointment - SPVAI Records Office</title>
-    <link rel="stylesheet" type="text/css" href="assets/css/bootstrap.min.css">
-    <link rel="stylesheet" type="text/css" href="assets/css/bootstrap-theme.min.css">
-</head>
-<body style="background-color: lightblue;">
 
-<nav class="navbar navbar-inverse">
-    <div class="container-fluid">
-        <div class="navbar-header">
-            <a class="navbar-brand" href="index.php">SPVAIRecordsOffice</a>
-        </div>
-        <ul class="nav navbar-nav">
-            <li><a href="student_area.php">Dashboard</a></li>
-            <li><a href="my_requests.php">My Requests</a></li>
-        </ul>
-        <ul class="nav navbar-nav navbar-right">
-            <li><a href="logout.php"><span class="glyphicon glyphicon-log-out"></span> Logout</a></li>
-        </ul>
-    </div>
-</nav>
+<div class="max-w-3xl mx-auto">
+    <header class="mb-12">
+        <h1 class="text-5xl font-black uppercase tracking-tighter mb-2">Schedule Visit</h1>
+        <p class="text-lg font-bold text-gray-600 uppercase tracking-wide">Pick a convenient date and time to pick up your document.</p>
+    </header>
 
-<div class="container">
-    <div class="row">
-        <div class="col-md-8 col-md-offset-2">
-            <div class="panel panel-primary">
-                <div class="panel-heading">
-                    <h3 class="panel-title">Schedule Appointment</h3>
-                </div>
-                <div class="panel-body">
-                    <div class="alert alert-info">
-                        <strong>Request:</strong> <?= htmlspecialchars($request['document_name']); ?> |
-                        <strong>Reference:</strong> SPVAI-<?= date('Y') ?>-<?= sprintf('%07d', $requestId); ?>
-                    </div>
-
-                    <form id="form-appointment">
-                        <input type="hidden" name="request_id" value="<?= $requestId; ?>">
-                        <input type="hidden" name="csrf_token" value="<?= $auth->generateCsrfToken(); ?>">
-
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="app-date">Select Date</label>
-                                    <input type="date" name="appointment_date" id="app-date" class="form-control" required>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="app-time">Available Time Slots</label>
-                                    <select name="appointment_time" id="app-time" class="form-control" required disabled>
-                                        <option value="">-- Select Date First --</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="text-center" style="margin-top: 20px;">
-                            <button type="submit" class="btn btn-success btn-lg">Confirm Appointment</button>
-                            <a href="my_requests.php" class="btn btn-default btn-lg">Cancel</a>
-                        </div>
-                    </form>
-                </div>
+    <div class="bg-white border-4 border-black shadow-brutal-lg p-8">
+        <div class="mb-8 p-4 bg-gray-50 border-2 border-black flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+                <p class="text-xs font-black uppercase text-gray-500">Document Request</p>
+                <p class="text-xl font-black"><?= htmlspecialchars($request['document_name']); ?></p>
+            </div>
+            <div class="text-right">
+                <p class="text-xs font-black uppercase text-gray-500">Reference</p>
+                <p class="text-lg font-bold">SPVAI-<?= date('Y') ?>-<?= sprintf('%07d', $requestId); ?></p>
             </div>
         </div>
+
+        <form id="form-appointment" class="space-y-8">
+            <input type="hidden" name="request_id" value="<?= $requestId; ?>">
+            <input type="hidden" name="csrf_token" value="<?= $auth->generateCsrfToken(); ?>">
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div class="space-y-2">
+                    <label for="app-date" class="block text-xs font-black uppercase">1. Select Date</label>
+                    <input type="date" name="appointment_date" id="app-date" class="w-full border-2 border-black p-3 rounded-none focus:outline-none focus:ring-2 focus:ring-black font-bold" required>
+                </div>
+
+                <div class="space-y-2">
+                    <label for="app-time" class="block text-xs font-black uppercase">2. Available Time Slots</label>
+                    <select name="appointment_time" id="app-time" class="w-full border-2 border-black p-3 rounded-none focus:outline-none focus:ring-2 focus:ring-black font-bold appearance-none" required disabled>
+                        <option value="">-- Select Date First --</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="flex flex-col md:flex-row gap-4 justify-center pt-6">
+                <a href="my_requests.php" class="px-8 py-3 border-2 border-black bg-white font-black uppercase text-sm shadow-brutal hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all text-center">
+                    Cancel
+                </a>
+                <button type="submit" class="px-8 py-3 bg-brutal-yellow border-2 border-black font-black uppercase text-sm shadow-brutal hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all text-center">
+                    Confirm Appointment
+                </button>
+            </div>
+        </form>
     </div>
 </div>
 
-<script src="assets/js/jquery-3.1.1.min.js"></script>
-<script src="assets/js/bootstrap.min.js"></script>
+<?php require_once('layouts/student_footer.php'); ?>
 <script>
 $(document).on('change', '#app-date', function() {
     var date = $(this).val();
@@ -177,5 +149,3 @@ $(document).on('submit', '#form-appointment', function(e) {
     });
 });
 </script>
-</body>
-</html>

@@ -1,86 +1,56 @@
 <?php
-require_once('class/Auth.php');
-
-// Require student login
-$auth->requireRole('student');
+require_once('layouts/student_header.php');
 
 // Fetch notifications for current user
 $sql = "SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC";
 $notifications = $auth->getRows($sql, [$_SESSION['user_id']]);
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link class="icon" rel="icon" type="images/x-icon" href="images/spvai.ico">
-    <title>My Notifications - SPVAI Records Office</title>
-    <link rel="stylesheet" type="text/css" href="assets/css/bootstrap.min.css">
-    <link rel="stylesheet" type="text/css" href="assets/css/bootstrap-theme.min.css">
-</head>
-<body style="background-color: lightblue;">
 
-<nav class="navbar navbar-inverse">
-    <div class="container-fluid">
-        <div class="navbar-header">
-            <a class="navbar-brand" href="index.php">SPVAIRecordsOffice</a>
-        </div>
-        <ul class="nav navbar-nav">
-            <li><a href="student_area.php">Dashboard</a></li>
-            <li><a href="request_document.php">Request Document</a></li>
-            <li><a href="my_requests.php">My Requests</a></li>
-            <li class="active"><a href="notifications.php">Notifications</a></li>
-        </ul>
-        <ul class="nav navbar-nav navbar-right">
-            <li><a href="logout.php"><span class="glyphicon glyphicon-log-out"></span> Logout</a></li>
-        </ul>
-    </div>
-</nav>
+<div class="max-w-4xl mx-auto">
+    <header class="mb-12">
+        <h1 class="text-5xl font-black uppercase tracking-tighter mb-2">Notifications</h1>
+        <p class="text-lg font-bold text-gray-600 uppercase tracking-wide">Stay updated on your request and payment status.</p>
+    </header>
 
-<div class="container">
-    <div class="row">
-        <div class="col-md-8 col-md-offset-2">
-            <div class="panel panel-default">
-                <div class="panel-heading">
-                    <h3 class="panel-title">Notifications</h3>
-                </div>
-                <div class="panel-body">
-                    <?php if (empty($notifications)): ?>
-                        <div class="alert alert-info text-center">
-                            You have no notifications at this time.
-                        </div>
-                    <?php else: ?>
-                        <div class="list-group">
-                            <?php foreach($notifications as $notif): ?>
-                                <div class="list-group-item <?= $notif['is_read'] ? '' : 'list-group-item-warning'; ?>" id="notif-<?= $notif['notification_id']; ?>">
-                                    <div class="row">
-                                        <div class="col-md-9">
-                                            <strong><?= htmlspecialchars(ucwords(str_replace('_', ' ', $notif['type']))); ?></strong>
-                                            <p class="small"><?= htmlspecialchars($notif['message']); ?></p>
-                                            <span class="text-muted" style="font-size: 11px;"><?= date('M d, Y h:i A', strtotime($notif['created_at'])); ?></span>
-                                        </div>
-                                        <div class="col-md-3 text-right">
-                                            <?php if (!$notif['is_read']): ?>
-                                                <button class="btn btn-xs btn-default btn-mark-read" data-id="<?= $notif['notification_id']; ?>">Mark as Read</button>
-                                            <?php endif; ?>
-                                            <?php if ($notif['request_id']): ?>
-                                                <a href="request_details.php?id=<?= $notif['request_id']; ?>" class="btn btn-xs btn-info">View Request</a>
-                                            <?php endif; ?>
-                                        </div>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
-                        </div>
-                    <?php endif; ?>
-                </div>
-            </div>
+    <?php if (empty($notifications)): ?>
+        <div class="bg-white border-4 border-black shadow-brutal-lg p-12 text-center">
+            <h2 class="text-2xl font-black uppercase mb-4">No notifications</h2>
+            <p class="text-gray-600 font-medium">You're all caught up!</p>
         </div>
-    </div>
+    <?php else: ?>
+        <div class="space-y-4">
+            <?php foreach($notifications as $notif): ?>
+                <div class="bg-white border-4 border-black shadow-brutal p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 <?= $notif['is_read'] ? 'opacity-70' : 'bg-yellow-50'; ?>" id="notif-<?= $notif['notification_id']; ?>">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-2 mb-2">
+                            <?php if (!$notif['is_read']): ?>
+                                <span class="w-3 h-3 bg-red-500 border border-black rounded-full"></span>
+                            <?php endif; ?>
+                            <span class="text-xs font-black uppercase tracking-widest text-gray-500">
+                                <?= htmlspecialchars(ucwords(str_replace('_', ' ', $notif['type'])); ?></span>
+                            <span class="text-[10px] font-bold text-gray-400 ml-auto"><?= date('M d, Y h:i A', strtotime($notif['created_at'])); ?></span>
+                        </div>
+                        <p class="text-lg font-bold leading-tight"><?= htmlspecialchars($notif['message']); ?></p>
+                    </div>
+                    <div class="flex gap-3">
+                        <?php if (!$notif['is_read']): ?>
+                            <button class="btn-mark-read px-3 py-2 border-2 border-black bg-white font-black text-[10px] uppercase shadow-brutal hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all whitespace-nowrap" data-id="<?= $notif['notification_id']; ?>">
+                                Mark Read
+                            </button>
+                        <?php endif; ?>
+                        <?php if ($notif['request_id']): ?>
+                            <a href="request_details.php?id=<?= $notif['request_id']; ?>" class="px-3 py-2 border-2 border-black bg-brutal-yellow font-black text-[10px] uppercase shadow-brutal hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all whitespace-nowrap">
+                                View Request
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
 </div>
 
-<script src="assets/js/jquery-3.1.1.min.js"></script>
-<script src="assets/js/bootstrap.min.js"></script>
+<?php require_once('layouts/student_footer.php'); ?>
 <script>
 $(document).on('click', '.btn-mark-read', function() {
     var notifId = $(this).data('id');
@@ -97,7 +67,7 @@ $(document).on('click', '.btn-mark-read', function() {
         success: function(data) {
             if (data.valid) {
                 btn.fadeOut();
-                $('#notif-' + notifId).removeClass('list-group-item-warning');
+                $('#notif-' + notifId).removeClass('bg-yellow-50').addClass('opacity-70');
             } else {
                 alert(data.msg);
             }
@@ -108,5 +78,3 @@ $(document).on('click', '.btn-mark-read', function() {
     });
 });
 </script>
-</body>
-</html>
