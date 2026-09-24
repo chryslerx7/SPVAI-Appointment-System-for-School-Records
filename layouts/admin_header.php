@@ -1,7 +1,7 @@
 <?php
 // layouts/admin_header.php
 require_once __DIR__ . '/../class/Auth.php';
-$auth->requireRole('admin');
+$auth->requireRole('admin', 'index.php');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -57,6 +57,11 @@ $auth->requireRole('admin');
             <li class="group">
                 <a href="payments.php" class="block p-3 border-2 border-transparent font-bold hover:border-white hover:bg-white hover:text-black transition-all uppercase text-sm">
                     Verify Payments
+                </a>
+            </li>
+            <li class="group">
+                <a href="documents.php" class="block p-3 border-2 border-transparent font-bold hover:border-white hover:bg-white hover:text-black transition-all uppercase text-sm">
+                    Documents
                 </a>
             </li>
         </ul>

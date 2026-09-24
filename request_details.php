@@ -25,6 +25,10 @@ if (!$request) {
 $year = date('Y', strtotime($request['created_at']));
 $refNumber = sprintf("SPVAI-%s-%07d", $year, $requestId);
 
+// Fetch latest payment for this request (ownership already validated above)
+$paySql = "SELECT * FROM payments WHERE request_id = ? ORDER BY created_at DESC LIMIT 1";
+$payment = $auth->getRow($paySql, [$requestId]);
+
 // Status Logic for Timeline
 $statuses = ['Pending', 'Approved', 'Processing', 'Ready', 'Completed'];
 $currentStatus = $request['status'];
@@ -95,7 +99,6 @@ if ($currentIndex === false) {
                                 <p class="text-sm italic text-gray-500">No appointment scheduled.</p>
                             <?php endif; ?>
                         </div>
-                    </div>
                     <div class="space-y-3">
                         <p class="text-xs font-black uppercase text-gray-500">Office Remarks</p>
                         <div class="p-4 border-2 border-black bg-gray-50 min-h-[80px]">
@@ -106,7 +109,48 @@ if ($currentIndex === false) {
                     </div>
                 </div>
             </div>
+
+            <div id="payment-section" tabindex="-1" class="bg-white border-4 border-black shadow-brutal-lg p-6">
+                <h2 class="text-xl font-black uppercase mb-6 border-b-4 border-black pb-2">Payment</h2>
+                <?php if ($payment):
+                    $payStatus = $payment['payment_status'] ?? 'Unpaid';
+                    $payColor = 'bg-gray-400';
+                    switch($payStatus) {
+                        case 'Paid': $payColor = 'bg-green-500'; break;
+                        case 'Pending Verification': $payColor = 'bg-amber-400'; break;
+                        case 'Rejected': $payColor = 'bg-red-500'; break;
+                        case 'Refunded': $payColor = 'bg-blue-500'; break;
+                    }
+                ?>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="space-y-1">
+                            <p class="text-xs font-black uppercase text-gray-500">Amount</p>
+                            <p class="text-lg font-black">₱<?= number_format($payment['amount'], 2); ?></p>
+                        </div>
+                        <div class="space-y-1">
+                            <p class="text-xs font-black uppercase text-gray-500">Status</p>
+                            <span class="inline-block border-2 border-black px-2 py-1 text-[10px] font-black uppercase text-white <?= $payColor; ?>">
+                                <?= htmlspecialchars($payStatus); ?>
+                            </span>
+                        </div>
+                        <div class="space-y-1">
+                            <p class="text-xs font-black uppercase text-gray-500">Method</p>
+                            <p class="text-lg font-bold"><?= htmlspecialchars($payment['payment_method'] ?? 'N/A'); ?></p>
+                        </div>
+                        <div class="space-y-1">
+                            <p class="text-xs font-black uppercase text-gray-500">Reference</p>
+                            <p class="text-lg font-bold"><?= htmlspecialchars($payment['reference_number'] ?? 'N/A'); ?></p>
+                        </div>
+                    </div>
+                <?php else: ?>
+                    <p class="text-sm italic text-gray-500">No payment submitted yet. Amount due: <span class="font-black not-italic">₱<?= number_format($request['fee'] ?? 0, 2); ?></span></p>
+                <?php endif; ?>
+                <a href="payments.php" class="inline-block mt-6 px-6 py-2 border-2 border-black bg-brutal-yellow font-black uppercase text-xs shadow-brutal hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all">
+                    Go to Payment Center
+                </a>
+            </div>
         </div>
+    </div>
 
         <!-- Sidebar: Status Tracker -->
         <div class="lg:col-span-1">
@@ -152,3 +196,17 @@ if ($currentIndex === false) {
     </div>
 
 <?php require_once('layouts/student_footer.php'); ?>
+<script>
+// Payment deep-link (P9-016): request_details.php?id=X&section=payment scrolls to the payment card.
+// Plain #payment-section anchors work natively without this script.
+(function() {
+    try {
+        var params = new URLSearchParams(window.location.search);
+        if (params.get('section') !== 'payment') return;
+        var el = document.getElementById('payment-section');
+        if (!el) return;
+        el.scrollIntoView({ block: 'start' });
+        el.focus({ preventScroll: true });
+    } catch (e) { /* no-op: deep-link is progressive enhancement */ }
+})();
+</script>

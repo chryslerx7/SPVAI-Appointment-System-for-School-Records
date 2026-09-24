@@ -137,6 +137,7 @@ $totalPages = ceil($total / $limit);
                                 </td>
                             </tr>
                         <?php endforeach; ?>
+                    <?php endif; ?>
                     </tbody>
                 </table>
             </div>

@@ -39,7 +39,7 @@ $notifications = $auth->getRows($sql, [$_SESSION['user_id']]);
                             </button>
                         <?php endif; ?>
                         <?php if ($notif['request_id']): ?>
-                            <a href="request_details.php?id=<?= $notif['request_id']; ?>" class="px-3 py-2 border-2 border-black bg-brutal-yellow font-black text-[10px] uppercase shadow-brutal hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all whitespace-nowrap">
+                            <a href="request_details.php?id=<?= $notif['request_id']; ?><?= strpos($notif['type'], 'payment_') === 0 ? '&section=payment' : ''; ?>" class="px-3 py-2 border-2 border-black bg-brutal-yellow font-black text-[10px] uppercase shadow-brutal hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all whitespace-nowrap">
                                 View Request
                             </a>
                         <?php endif; ?>

@@ -30,7 +30,7 @@ if ($user) {
     if ($user['role'] === 'admin') {
         $_SESSION['user_id'] = $user['user_id'];
         $_SESSION['role'] = $user['role'];
-        echo json_encode(['valid' => true, 'msg' => 'Admin Login successful!', 'url' => 'admin/dashboard.php']);
+        echo json_encode(['valid' => true, 'msg' => 'Admin Login successful!', 'url' => 'dashboard.php']);
     } else {
         echo json_encode(['valid' => false, 'msg' => 'Access denied. Administrator account required.']);
     }
@@ -64,12 +64,12 @@ if ($legacyUser && md5($password) === $legacyUser['user_password']) {
         $_SESSION['user_id'] = $newUserId;
         $_SESSION['role'] = 'admin';
 
-        echo json_encode(['valid' => true, 'msg' => 'Admin Login successful (Migrated)!', 'url' => 'admin/dashboard.php']);
+        echo json_encode(['valid' => true, 'msg' => 'Admin Login successful (Migrated)!', 'url' => 'dashboard.php']);
     } catch (Exception $e) {
         // If migration fails, we still let them in but log the error
         $_SESSION['user_id'] = $legacyUser['user_id'];
         $_SESSION['role'] = 'admin';
-        echo json_encode(['valid' => true, 'msg' => 'Admin Login successful!', 'url' => 'admin/dashboard.php']);
+        echo json_encode(['valid' => true, 'msg' => 'Admin Login successful!', 'url' => 'dashboard.php']);
     }
     exit();
 }

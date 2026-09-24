@@ -12,6 +12,11 @@ if (!in_array($sortBy, $allowedSort)) {
 }
 $order = ($order === 'ASC') ? 'ASC' : 'DESC';
 
+// Optional deep-link filter from admin/request_details.php (?request_id=<ID>).
+// Strictly validated: only a positive integer narrows the results; anything
+// else is ignored so the page behaves exactly as if no filter was given.
+$requestId = filter_var($_GET['request_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) ?: null;
+
 // Build Query
 $sql = "SELECT p.*, u.first_name, u.last_name, r.request_id, dt.document_name
         FROM payments p
@@ -20,10 +25,18 @@ $sql = "SELECT p.*, u.first_name, u.last_name, r.request_id, dt.document_name
         JOIN document_types dt ON r.document_id = dt.document_id";
 
 $params = [];
+$conditions = [];
 if ($search) {
-    $sql .= " WHERE (u.first_name LIKE ? OR u.last_name LIKE ? OR p.reference_number LIKE ? OR p.payment_status LIKE ?)";
+    $conditions[] = "(u.first_name LIKE ? OR u.last_name LIKE ? OR p.reference_number LIKE ? OR p.payment_status LIKE ?)";
     $searchTerm = "%$search%";
     $params = [$searchTerm, $searchTerm, $searchTerm, $searchTerm];
+}
+if ($requestId) {
+    $conditions[] = "r.request_id = ?";
+    $params[] = $requestId;
+}
+if ($conditions) {
+    $sql .= " WHERE " . implode(" AND ", $conditions);
 }
 
 $sql .= " ORDER BY $sortBy $order";
@@ -43,6 +56,9 @@ $payments = $auth->getRows($sql, $params);
         <!-- Filter Bar -->
         <div class="p-6 border-b-4 border-black bg-gray-50">
             <form method="GET" class="flex flex-col md:flex-row gap-4">
+                <?php if ($requestId): ?>
+                    <input type="hidden" name="request_id" value="<?= (int)$requestId; ?>">
+                <?php endif; ?>
                 <div class="flex-1 relative">
                     <input type="text" name="search" class="w-full border-2 border-black p-3 rounded-none focus:outline-none focus:ring-2 focus:ring-black font-bold"
                            placeholder="Search reference, student, status..." value="<?= htmlspecialchars($search); ?>">
@@ -66,6 +82,13 @@ $payments = $auth->getRows($sql, $params);
                 </div>
             </form>
         </div>
+
+        <?php if ($requestId): ?>
+            <div class="px-6 py-3 border-b-4 border-black bg-brutal-yellow flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
+                <p class="text-xs font-black uppercase">Filtered to request #<?= (int)$requestId; ?></p>
+                <a href="payments.php" class="text-xs font-black uppercase underline">Clear filter</a>
+            </div>
+        <?php endif; ?>
 
         <!-- Payments Table -->
         <div class="overflow-x-auto">
@@ -119,6 +142,7 @@ $payments = $auth->getRows($sql, $params);
                                 </td>
                             </tr>
                         <?php endforeach; ?>
+                    <?php endif; ?>
                     </tbody>
                 </table>
             </div>

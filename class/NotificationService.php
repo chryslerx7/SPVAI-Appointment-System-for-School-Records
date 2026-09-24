@@ -74,7 +74,14 @@ class NotificationService extends Database {
         try {
             // Using native mail() as a baseline for this project's environment.
             // In a production environment, PHPMailer or a professional API would be used here.
-            $sent = mail($to, $subject, $body, $headers);
+            // The @ operator keeps SMTP connection warnings out of the HTTP
+            // response (which would corrupt JSON envelopes); delivery failure
+            // is still detected via the return value and logged below.
+            $sent = @mail($to, $subject, $body, $headers);
+            if (!$sent) {
+                $lastError = error_get_last();
+                error_log("Email Delivery Failure: " . ($lastError['message'] ?? 'mail() returned false') . " [to: " . $to . "]");
+            }
             return $sent;
         } catch (Exception $e) {
             error_log("Email Delivery Failure: " . $e->getMessage());

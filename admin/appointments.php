@@ -120,6 +120,7 @@ $appointments = $auth->getRows($sql, $params);
                                 </td>
                             </tr>
                         <?php endforeach; ?>
+                    <?php endif; ?>
                     </tbody>
                 </table>
             </div>

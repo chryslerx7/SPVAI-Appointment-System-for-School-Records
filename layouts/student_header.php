@@ -30,11 +30,30 @@ $auth->requireRole('student');
 </head>
 <body class="bg-brutal-bg min-h-screen font-sans text-black flex flex-col md:flex-row">
 
-    <!-- Sidebar Navigation -->
-    <nav class="w-full md:w-64 bg-white border-r-4 border-black flex flex-col">
-        <div class="p-6 border-b-4 border-black">
+    <!-- Mobile top bar with hamburger (tablet/mobile only, hidden on desktop) -->
+    <div class="md:hidden w-full bg-white border-b-4 border-black flex items-center justify-between p-4 sticky top-0 z-30">
+        <div>
             <h1 class="text-2xl font-black uppercase tracking-tighter">SPVAI</h1>
             <p class="text-xs font-bold uppercase tracking-widest text-gray-600">Student Portal</p>
+        </div>
+        <button id="student-menu-toggle" type="button" aria-label="Open navigation menu" aria-expanded="false" aria-controls="student-sidebar" class="p-3 border-2 border-black bg-brutal-yellow shadow-brutal hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2">
+            <span class="block w-6 h-1 bg-black mb-1" aria-hidden="true"></span>
+            <span class="block w-6 h-1 bg-black mb-1" aria-hidden="true"></span>
+            <span class="block w-6 h-1 bg-black" aria-hidden="true"></span>
+        </button>
+    </div>
+
+    <!-- Backdrop for mobile sidebar (hidden on desktop) -->
+    <div id="student-menu-backdrop" class="hidden fixed inset-0 z-30 bg-black bg-opacity-50 md:hidden" aria-hidden="true"></div>
+
+    <!-- Sidebar Navigation: static sidebar on desktop, off-canvas panel on tablet/mobile -->
+    <nav id="student-sidebar" aria-label="Student portal navigation" class="fixed inset-y-0 left-0 z-40 w-64 max-w-[85vw] bg-white border-r-4 border-black flex flex-col overflow-y-auto transform -translate-x-full transition-transform duration-200 md:static md:z-auto md:w-64 md:max-w-none md:shrink-0 md:overflow-visible md:translate-x-0 md:transition-none">
+        <div class="p-6 border-b-4 border-black flex items-start justify-between gap-4">
+            <div>
+                <h1 class="text-2xl font-black uppercase tracking-tighter">SPVAI</h1>
+                <p class="text-xs font-bold uppercase tracking-widest text-gray-600">Student Portal</p>
+            </div>
+            <button id="student-menu-close" type="button" aria-label="Close navigation menu" class="md:hidden px-3 py-1 border-2 border-black bg-white text-2xl font-black leading-none shadow-brutal hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2">&times;</button>
         </div>
 
         <ul class="flex-1 p-4 space-y-2">
@@ -75,7 +94,7 @@ $auth->requireRole('student');
             </li>
         </ul>
 
-        <div class="p-4 border-t-4 border-black">
+        <div class="p-4 border-t-4 border-black mt-auto">
             <a href="logout.php" class="block p-3 border-2 border-black bg-red-500 text-white font-black uppercase text-sm text-center shadow-brutal hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all">
                 Logout
             </a>
