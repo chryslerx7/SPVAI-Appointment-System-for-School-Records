@@ -40,9 +40,9 @@ if ($currentIndex === false) {
 ?>
 
 <div class="max-w-4xl mx-auto">
-    <header class="mb-12 flex justify-between items-end">
+    <header class="mb-12 flex flex-wrap items-end justify-between gap-4">
         <div>
-            <h1 class="text-5xl font-black uppercase tracking-tighter mb-2">Request Details</h1>
+            <h1 class="text-4xl md:text-5xl font-black uppercase tracking-tighter mb-2">Request Details</h1>
             <p class="text-lg font-bold text-gray-600 uppercase tracking-wide"><?= $refNumber; ?></p>
         </div>
         <a href="my_requests.php" class="px-4 py-2 border-2 border-black bg-white font-black text-xs uppercase shadow-brutal hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all">

@@ -8,7 +8,7 @@ $documents = $auth->getRows($sql);
 
 <div class="max-w-6xl mx-auto">
     <header class="mb-12">
-        <h1 class="text-5xl font-black uppercase tracking-tighter mb-2">Request Document</h1>
+        <h1 class="text-4xl md:text-5xl font-black uppercase tracking-tighter mb-2">Request Document</h1>
         <p class="text-lg font-bold text-gray-600 uppercase tracking-wide">Select a document from our official list to start your request.</p>
     </header>
 

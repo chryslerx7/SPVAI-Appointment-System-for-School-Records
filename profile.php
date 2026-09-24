@@ -6,17 +6,17 @@ $user = $auth->getCurrentUser();
 
 <div class="max-w-3xl mx-auto">
     <header class="mb-12">
-        <h1 class="text-5xl font-black uppercase tracking-tighter mb-2">My Profile</h1>
+        <h1 class="text-4xl md:text-5xl font-black uppercase tracking-tighter mb-2">My Profile</h1>
         <p class="text-lg font-bold text-gray-600 uppercase tracking-wide">Manage your account and contact information.</p>
     </header>
 
     <div class="bg-white border-4 border-black shadow-brutal-lg p-8">
         <div class="flex items-center gap-6 mb-8">
-            <div class="w-24 h-24 bg-brutal-yellow border-4 border-black flex items-center justify-center text-4xl font-black shadow-brutal">
+            <div class="w-24 h-24 shrink-0 bg-brutal-yellow border-4 border-black flex items-center justify-center text-4xl font-black shadow-brutal">
                 <?= strtoupper(substr($user['first_name'], 0, 1)) . strtoupper(substr($user['last_name'], 0, 1)); ?>
             </div>
-            <div>
-                <h2 class="text-3xl font-black uppercase tracking-tighter"><?= htmlspecialchars($user['first_name'] . ' ' . $user['last_name']); ?></h2>
+            <div class="min-w-0">
+                <h2 class="text-2xl md:text-3xl font-black uppercase tracking-tighter break-words"><?= htmlspecialchars($user['first_name'] . ' ' . $user['last_name']); ?></h2>
                 <p class="text-sm font-bold text-gray-500 uppercase"><?= $user['role']; ?> Account</p>
             </div>
         </div>
@@ -24,15 +24,15 @@ $user = $auth->getCurrentUser();
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div class="space-y-1">
                 <label class="block text-xs font-black uppercase text-gray-500">Student ID</label>
-                <p class="text-lg font-bold p-3 border-2 border-black bg-gray-50"><?= htmlspecialchars($user['student_id']); ?></p>
+                <p class="text-lg font-bold p-3 border-2 border-black bg-gray-50 break-words"><?= htmlspecialchars($user['student_id']); ?></p>
             </div>
             <div class="space-y-1">
                 <label class="block text-xs font-black uppercase text-gray-500">Email Address</label>
-                <p class="text-lg font-bold p-3 border-2 border-black bg-gray-50"><?= htmlspecialchars($user['email']); ?></p>
+                <p class="text-lg font-bold p-3 border-2 border-black bg-gray-50 break-words"><?= htmlspecialchars($user['email']); ?></p>
             </div>
             <div class="space-y-1">
                 <label class="block text-xs font-black uppercase text-gray-500">Phone Number</label>
-                <p class="text-lg font-bold p-3 border-2 border-black bg-gray-50"><?= htmlspecialchars($user['phone'] ?? 'Not provided'); ?></p>
+                <p class="text-lg font-bold p-3 border-2 border-black bg-gray-50 break-words"><?= htmlspecialchars($user['phone'] ?? 'Not provided'); ?></p>
             </div>
             <div class="space-y-1">
                 <label class="block text-xs font-black uppercase text-gray-500">Account Status</label>

@@ -8,7 +8,7 @@ $notifications = $auth->getRows($sql, [$_SESSION['user_id']]);
 
 <div class="max-w-4xl mx-auto">
     <header class="mb-12">
-        <h1 class="text-5xl font-black uppercase tracking-tighter mb-2">Notifications</h1>
+        <h1 class="text-4xl md:text-5xl font-black uppercase tracking-tighter mb-2">Notifications</h1>
         <p class="text-lg font-bold text-gray-600 uppercase tracking-wide">Stay updated on your request and payment status.</p>
     </header>
 
@@ -22,7 +22,7 @@ $notifications = $auth->getRows($sql, [$_SESSION['user_id']]);
             <?php foreach($notifications as $notif): ?>
                 <div class="bg-white border-4 border-black shadow-brutal p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 <?= $notif['is_read'] ? 'opacity-70' : 'bg-yellow-50'; ?>" id="notif-<?= $notif['notification_id']; ?>">
                     <div class="flex-1">
-                        <div class="flex items-center gap-2 mb-2">
+                        <div class="flex flex-wrap items-center gap-2 mb-2">
                             <?php if (!$notif['is_read']): ?>
                                 <span class="w-3 h-3 bg-red-500 border border-black rounded-full"></span>
                             <?php endif; ?>

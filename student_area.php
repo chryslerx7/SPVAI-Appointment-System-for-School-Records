@@ -21,7 +21,7 @@ $recentRequests = $auth->getRows("SELECT r.*, dt.document_name FROM requests r J
 
 <div class="max-w-6xl mx-auto">
     <header class="mb-12">
-        <h1 class="text-5xl font-black uppercase tracking-tighter mb-2">Good Morning, <?= htmlspecialchars($user['first_name']); ?>!</h1>
+        <h1 class="text-4xl md:text-5xl font-black uppercase tracking-tighter mb-2 break-words">Good Morning, <?= htmlspecialchars($user['first_name']); ?>!</h1>
         <p class="text-lg font-bold text-gray-600 uppercase tracking-wide">Welcome back to the Records Office Portal.</p>
     </header>
 
@@ -57,7 +57,7 @@ $recentRequests = $auth->getRows("SELECT r.*, dt.document_name FROM requests r J
                     </div>
                     <div>
                         <p class="text-xs font-black uppercase text-gray-500">Email</p>
-                        <p class="text-lg font-bold"><?= htmlspecialchars($user['email']); ?></p>
+                        <p class="text-lg font-bold break-words"><?= htmlspecialchars($user['email']); ?></p>
                     </div>
                     <div>
                         <p class="text-xs font-black uppercase text-gray-500">Phone</p>

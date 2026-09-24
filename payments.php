@@ -16,7 +16,7 @@ $payments = $auth->getRows($sql, [$userId]);
 
 <div class="max-w-6xl mx-auto">
     <header class="mb-12">
-        <h1 class="text-5xl font-black uppercase tracking-tighter mb-2">Payment Center</h1>
+        <h1 class="text-4xl md:text-5xl font-black uppercase tracking-tighter mb-2">Payment Center</h1>
         <p class="text-lg font-bold text-gray-600 uppercase tracking-wide">Submit and track your document payment verifications.</p>
     </header>
 

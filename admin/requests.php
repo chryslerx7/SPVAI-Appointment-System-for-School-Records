@@ -51,7 +51,7 @@ $totalPages = ceil($total / $limit);
 <div class="max-w-7xl mx-auto">
     <header class="mb-12 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-            <h1 class="text-5xl font-black uppercase tracking-tighter mb-2">Document Requests</h1>
+            <h1 class="text-4xl md:text-5xl font-black uppercase tracking-tighter mb-2">Document Requests</h1>
             <p class="text-lg font-bold text-gray-600 uppercase tracking-wide">Review and manage all incoming student requests.</p>
         </div>
     </header>
@@ -64,7 +64,7 @@ $totalPages = ceil($total / $limit);
                     <input type="text" name="search" class="w-full border-2 border-black p-3 rounded-none focus:outline-none focus:ring-2 focus:ring-black font-bold"
                            placeholder="Search student, ID, doc..." value="<?= htmlspecialchars($search); ?>">
                 </div>
-                <div class="flex gap-2">
+                <div class="flex flex-wrap gap-2">
                     <select name="sort" class="border-2 border-black p-3 rounded-none bg-white font-bold focus:outline-none">
                         <option value="created_at" <?= $sortBy == 'created_at' ? 'selected' : ''; ?>>Date</option>
                         <option value="status" <?= $sortBy == 'status' ? 'selected' : ''; ?>>Status</option>

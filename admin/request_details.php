@@ -37,7 +37,7 @@ $refNumber = sprintf("SPVAI-%s-%07d", $year, $requestId);
 <div class="max-w-6xl mx-auto">
     <header class="mb-12 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-            <h1 class="text-5xl font-black uppercase tracking-tighter mb-2">Manage Request</h1>
+            <h1 class="text-4xl md:text-5xl font-black uppercase tracking-tighter mb-2">Manage Request</h1>
             <p class="text-lg font-bold text-gray-600 uppercase tracking-wide"><?= $refNumber; ?></p>
         </div>
         <a href="requests.php" class="px-4 py-2 border-2 border-black bg-white font-black text-xs uppercase shadow-brutal hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all">
@@ -61,7 +61,7 @@ $refNumber = sprintf("SPVAI-%s-%07d", $year, $requestId);
                     </div>
                     <div>
                         <p class="text-xs font-black uppercase text-gray-500">Email</p>
-                        <p class="text-lg font-bold"><?= htmlspecialchars($request['email']); ?></p>
+                        <p class="text-lg font-bold break-words"><?= htmlspecialchars($request['email']); ?></p>
                     </div>
                     <div>
                         <p class="text-xs font-black uppercase text-gray-500">Phone</p>
@@ -74,25 +74,25 @@ $refNumber = sprintf("SPVAI-%s-%07d", $year, $requestId);
                 <h2 class="text-xl font-black uppercase mb-6 border-b-4 border-black pb-2">Payment Status</h2>
                 <?php if ($payment): ?>
                     <div class="space-y-4">
-                        <div class="flex justify-between items-center">
+                        <div class="flex justify-between items-center gap-4">
                             <p class="text-xs font-black uppercase text-gray-500">Amount</p>
                             <p class="text-lg font-black">₱<?= number_format($payment['amount'], 2); ?></p>
                         </div>
-                        <div class="flex justify-between items-center">
+                        <div class="flex justify-between items-center gap-4">
                             <p class="text-xs font-black uppercase text-gray-500">Method</p>
                             <p class="text-sm font-bold"><?= htmlspecialchars($payment['payment_method']); ?></p>
                         </div>
-                        <div class="flex justify-between items-center">
+                        <div class="flex justify-between items-center gap-4">
                             <p class="text-xs font-black uppercase text-gray-500">Reference</p>
                             <p class="text-sm font-bold"><?= htmlspecialchars($payment['reference_number']); ?></p>
                         </div>
-                        <div class="flex justify-between items-center">
+                        <div class="flex justify-between items-center gap-4">
                             <p class="text-xs font-black uppercase text-gray-500">Status</p>
                             <span class="border-2 border-black px-2 py-0.5 text-[10px] font-black uppercase <?= $payment['payment_status'] == 'Paid' ? 'bg-green-500 text-white' : ($payment['payment_status'] == 'Pending Verification' ? 'bg-amber-400' : 'bg-red-500 text-white'); ?>">
                                 <?= htmlspecialchars($payment['payment_status']); ?>
                             </span>
                         </div>
-                        <div class="flex justify-between items-center">
+                        <div class="flex justify-between items-center gap-4">
                             <p class="text-xs font-black uppercase text-gray-500">Verified By</p>
                             <p class="text-sm font-bold"><?= htmlspecialchars($payment['verified_by'] ?? 'N/A'); ?></p>
                         </div>

@@ -31,7 +31,7 @@ $refNumber = sprintf("SPVAI-%s-%07d", $year, $app['request_id']);
     <div class="bg-white border-4 border-black shadow-brutal-lg overflow-hidden">
         <!-- Success Header -->
         <div class="p-8 border-b-4 border-black bg-green-500 text-white text-center">
-            <h1 class="text-5xl font-black uppercase tracking-tighter mb-2">Success!</h1>
+            <h1 class="text-4xl md:text-5xl font-black uppercase tracking-tighter mb-2">Success!</h1>
             <h2 class="text-2xl font-bold uppercase tracking-wide">Appointment Scheduled</h2>
         </div>
 
@@ -40,19 +40,19 @@ $refNumber = sprintf("SPVAI-%s-%07d", $year, $app['request_id']);
 
             <!-- Details Card -->
             <div class="border-4 border-black p-6 bg-gray-50 space-y-4">
-                <div class="flex justify-between border-b-2 border-black pb-2">
+                <div class="flex justify-between gap-4 border-b-2 border-black pb-2">
                     <span class="text-xs font-black uppercase text-gray-500">Request Ref #</span>
                     <span class="font-black"><?= $refNumber; ?></span>
                 </div>
-                <div class="flex justify-between border-b-2 border-black pb-2">
+                <div class="flex justify-between gap-4 border-b-2 border-black pb-2">
                     <span class="text-xs font-black uppercase text-gray-500">Document</span>
                     <span class="font-black"><?= htmlspecialchars($app['document_name']); ?></span>
                 </div>
-                <div class="flex justify-between border-b-2 border-black pb-2">
+                <div class="flex justify-between gap-4 border-b-2 border-black pb-2">
                     <span class="text-xs font-black uppercase text-gray-500">Date</span>
                     <span class="font-black"><?= date('F j, Y', strtotime($app['appointment_date'])); ?></span>
                 </div>
-                <div class="flex justify-between border-b-2 border-black pb-2">
+                <div class="flex justify-between gap-4 border-b-2 border-black pb-2">
                     <span class="text-xs font-black uppercase text-gray-500">Time</span>
                     <span class="font-black"><?= date('h:i A', strtotime($app['appointment_time'])); ?></span>
                 </div>

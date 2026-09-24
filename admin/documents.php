@@ -9,7 +9,7 @@ $documents = $auth->getRows("SELECT document_id, document_name, description, pro
 <div class="max-w-7xl mx-auto">
     <header class="mb-12">
         <div>
-            <h1 class="text-5xl font-black uppercase tracking-tighter mb-2">Document Fees</h1>
+            <h1 class="text-4xl md:text-5xl font-black uppercase tracking-tighter mb-2">Document Fees</h1>
             <p class="text-lg font-bold text-gray-600 uppercase tracking-wide">View and update the fee charged per document. Student payment requests use these amounts.</p>
         </div>
     </header>
