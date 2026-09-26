@@ -73,7 +73,7 @@ $auth->requireRole('student');
                 </a>
             </li>
             <li>
-                <a href="appointments.php" class="block p-3 border-2 border-transparent font-bold hover:border-black hover:bg-brutal-yellow transition-all uppercase text-sm">
+                <a href="my_requests.php" class="block p-3 border-2 border-transparent font-bold hover:border-black hover:bg-brutal-yellow transition-all uppercase text-sm">
                     Appointments
                 </a>
             </li>

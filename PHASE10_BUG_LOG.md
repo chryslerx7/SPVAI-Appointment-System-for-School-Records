@@ -31,3 +31,13 @@ following the same format as PHASE9_BUG_LOG.md.
 - **Retest**: `php -l` clean on both layouts + full-project sweep zero errors; admin nav script 15/15 headless behavior checks; logged-out guards intact on both portals; class audit confirms no fixed headings/static sidebars/unwrapped filter rows remain. No live browser here — DevTools pass at 390/768/1440 recommended.
 - **Limitations**: No optical verification of rendered pixels; numeric `text-6xl`/`text-8xl` stat figures intentionally left full-size (short centered numerals).
 - **Status**: FIXED
+
+---
+## P10-005 — Student Appointments Navigation
+- **Description**: Student sidebar "Appointments" pointed to bare `appointments.php` with no `?id=`, which immediately JS-bounced to `my_requests.php?error=no_request`. There is no general appointments list behind `appointments.php`, so the sidebar item was a dead end (P10-004 HIGH finding, P10-001 carry-over).
+- **Severity**: High (navigation dead end; no data/auth impact)
+- **Root Cause**: `appointments.php` is a per-request scheduler requiring `?id=<request_id>` plus ownership/eligibility checks; the sidebar exposed it as a global section with no list view behind it.
+- **Fix**: `layouts/student_header.php` only — the "Appointments" anchor `href` changed from `appointments.php` to `my_requests.php`. Label, styling classes, sidebar position, hamburger/backdrop/close behavior, and `appointments.php` itself left untouched. No new page, no new queries, no business-logic, auth, or schema change.
+- **Resulting navigation**: Appointments → `my_requests.php` → per-row Schedule (eligible requests only) → `appointments.php?id=<request_id>` → `appointment_confirmation.php?id=<appointment_id>`. Ineligible requests correctly show no Schedule button; direct `appointments.php` guards/ownership unchanged.
+- **Retest**: `php -l layouts/student_header.php` clean + full-project `php -l` sweep zero errors; `git status`/`git diff` confirm only `layouts/student_header.php` + `PHASE10_BUG_LOG.md` changed; sidebar markup verified (Appointments href now `my_requests.php`, My Requests unchanged, P10-003 responsive classes intact); `appointments.php` untouched (scheduler + `?id=` flow preserved); logged-out guard (`requireRole('student')`) and ownership checks untouched. No live browser here — click-through at 390/768/1440 recommended.
+- **Status**: FIXED
