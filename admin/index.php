@@ -56,7 +56,7 @@ require_once('../class/Auth.php');
         </div>
 
         <div class="mt-8 text-center">
-            <a href="../index.php" class="text-xs font-bold uppercase tracking-widest text-gray-500 hover:text-black transition-colors">← Return to Public Home</a>
+            <a href="../public_home.php" class="text-xs font-bold uppercase tracking-widest text-gray-500 hover:text-black transition-colors">← Return to Public Home</a>
         </div>
     </div>
 
