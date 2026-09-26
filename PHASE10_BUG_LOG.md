@@ -186,3 +186,149 @@ P10-005 regression verified intact: `layouts/student_header.php:76` Appointments
 - **Regression Results**: P10-005 intact (sidebar Appointments → `my_requests.php`, Schedule → `appointments.php?id=`); P10-007 intact (`submit_payment.php` Paid guard present, file otherwise untouched by this task).
 - **Scope Compliance**: Only the two appointment endpoints + this log entry changed. No auth/profile/payment/notification/fee/remarks/schema/legacy changes; no UI redesign; no new features.
 - **Status**: FIXED — `min_advance_days = 1` is now enforced.
+
+---
+## P10-009 — Fix Admin Remarks Character Encoding
+- **Issue**: P10-004-08 (Medium) — admin remarks containing `&` (and `=` in combination) were corrupted on save from `admin/request_details.php`.
+- **Root Cause**: `admin/request_details.php:204` built the POST body as `formData += '&remarks=' + $('#admin-remarks').val()` — raw textarea value concatenated onto a serialized query string, so `&` was parsed as a parameter delimiter and the remark truncated at the first `&`.
+- **Exact File/Section**: `admin/request_details.php:204`, inside the `#form-update-status` submit handler. One-line change; endpoint (`update_status.php`), form structure, and backend storage untouched.
+- **Fix Applied**: `formData += '&remarks=' + encodeURIComponent($('#admin-remarks').val());` — transport-level URL-encoding only, applied once. No double-encoding (backend reads `$_POST['remarks']` normally, no decode added). Existing `htmlspecialchars()` display escaping left in place (URL-encoding and HTML-escaping solve different problems).
+- **Encoding Approach**: `encodeURIComponent` on the remarks value at request-construction time, matching the existing `application/x-www-form-urlencoded` POST body. No new library; no new endpoint; no schema change.
+- **Before/After Behavior**: Before, `Bring ID & receipt = required` arrived as `Bring ID ` (truncated). After, the server receives and stores the exact string.
+- **Test Cases**: `php -l admin/request_details.php` clean + full-project sweep zero errors; Node transport demo (old vs new parsed as form body) — `Bring ID & receipt = required` OLD corrupted / NEW ok; `Bring valid ID` ok/ok; `Bring ID & receipt & school form` OLD corrupted / NEW ok; `Status = pending = verification` ok/ok; `ID & receipt = required; submit before 3 PM` OLD corrupted / NEW ok. Live backend round-trip through real `update_status.php` with transient admin-session/request data: `{"valid":true}`, DB stored exactly `Bring ID & receipt = required` (MATCH=OK), transient rows deleted (residue 0/0 verified; expected P9-021 mail soft-fail logged, transaction unaffected). Display layer verified escaped-but-intact via unchanged `htmlspecialchars` output.
+- **Regression Results**: P10-005 intact (sidebar Appointments → `my_requests.php`); P10-007 intact (Paid guard present in `data/submit_payment.php`); P10-008 intact (`min_advance_days` guards present in both appointment endpoints). CSRF/admin-role guard, prepared statements, and server-side validation untouched.
+- **Scope Compliance**: Only `admin/request_details.php` (1 line) + this log entry changed. No auth/payment/profile/fee/template/schema/legacy changes; no page redesign.
+- **Status**: FIXED
+
+---
+## P10-010 — Profile Audit & Edit-Behavior Decision (AUDIT ONLY, no code/data changes)
+
+### 1. Audit Status
+Complete. Read-only inspection (static code review, reference search, `php -l`, read-only directory checks). No PHP/HTML/CSS/JS modified, no database or schema changes, no accounts created, no records altered. The dead-button question is confirmed genuine and framed below as design inputs for the owner — no implementation performed.
+
+### 2. Files Inspected
+`profile.php` (full, 51 lines), `layouts/student_header.php`, `layouts/student_footer.php`, `class/Auth.php`, `class/User.php` (head), `class/NotificationService.php:56-67`, `student_area.php:24,56,60`, `admin/request_details.php:12`, `admin/requests.php`, `admin/appointments.php`, `admin/payments.php`, `data/register.php`, `data/auth_login.php`, `data/login.php`, `test_auth.php`, `assets/js/admin.js:241-291`, `js/` directory listing, `data/` directory listing, `database/phase1_schema.sql:10-24`, `PHASE1_DATABASE.md`, `PHASE2_AUTHENTICATION.md`, `DEV_ADMIN_LOCAL.md:26-33`.
+
+### 3. Current Profile Fields
+`profile.php` displays exactly (all read-only `<p>` elements, values via `getCurrentUser()` + `htmlspecialchars`): avatar initials (first+last initial, line 16), full name (line 19), role label + "Account" (line 20, NOTE: unescaped `<?= $user['role'] ?>`), Student ID (line 27), Email Address (line 31), Phone Number with `'Not provided'` fallback (line 35), hardcoded `Active` status badge (line 39 — static text, not derived from any column). No password field, no created-date, no edit inputs anywhere on the page.
+
+### 4. Current "Update Information" Button Behavior
+`profile.php:43-47`: a bare `<button>` (default type, no `type="submit"` target) inside a `<div>`, with no enclosing `<form>`, no `href`, no `onclick`, no `data-*` attributes, no `disabled` state, no modal trigger. No listener exists in `profile.php`, `layouts/student_footer.php` (nav-toggle script only), or any project JS referencing profile. **Genuinely non-functional — clicking it does nothing.** It is not a security vulnerability (it submits nothing and triggers no request).
+
+### 5. Existing Profile/Edit Infrastructure
+**None exists.** Repo-wide search for `update_profile`, `edit_profile`, `update_user`, and `Update Information` returns only the dead button (plus this log). `data/` contains 27 handlers and none is profile-related. Zero `UPDATE users` statements exist in any application PHP file (only a manual DBA snippet in `DEV_ADMIN_LOCAL.md:33`). Password changing is also absent: `assets/js/admin.js:243` references `#form-changepassword` → `../data/update_password.php`, but that endpoint file does not exist (`Test-Path` False) and no such form exists in any PHP file — orphaned legacy JS only. `class/User.php` targets the legacy `user` table (`user_account`/`user_password`) and is unrelated to the modern `users` table.
+
+### 6. Users Table Findings
+Per `database/phase1_schema.sql:10-24`: `user_id` INT PK AUTO_INCREMENT; `student_id` VARCHAR(50) NULL with UNIQUE `uk_student_id`; `first_name`/`last_name` VARCHAR(100) NOT NULL; `email` VARCHAR(150) NOT NULL with UNIQUE `uk_email`; `phone` VARCHAR(20) NULL; `password_hash` VARCHAR(255) NOT NULL; `role` VARCHAR(20) DEFAULT 'student'; `created_at`/`updated_at` timestamps. No status/active column (the profile "Active" badge is decorative). Uniqueness constraints mean any future email/student_id editing must handle collision checks.
+
+### 7. Authentication Dependencies
+`class/Auth.php`: login looks up `WHERE email = ?` + `password_verify` (line 92-95) — **email is the login identity**; session stores only `user_id` + `role` (lines 99-100) with fixation-safe regeneration; `requireRole` trusts the session `role` value (lines 76-83), so a role change would take effect only at next login; `getCurrentUser()` re-reads by `user_id` (lines 53-57), so name/phone/email edits would reflect immediately in UI. `test_auth.php:79-80` and `data/login.php:48-58` show legacy MD5 admins auto-migrated on login — email-keyed behavior must keep working for those rows too.
+
+### 8. Field Decision Matrix
+| Field | Displayed? | Currently Editable? | Used by Auth? | Used by Requests? | Used by Notifications? | Notes |
+|---|---|---|---|---|---|---|
+| `user_id` | No | No (registration assigns) | Yes — session key, all ownership predicates | Yes — FK on requests/appointments/payments/notifications | Yes — recipient key | Immutable identity; never user-editable |
+| `student_id` | Yes | No (set at registration only) | No | Shown in admin lists/search | No | UNIQUE; appears to be the institutional identity — changing it has admin/record-keeping implications |
+| `first_name` / `last_name` | Yes | No | No (display only; greeting, avatar, admin lists) | Displayed in admin lists/search | Yes — `[Student Name]` placeholder in email bodies | Low-risk editable candidates |
+| `email` | Yes | No | **Yes — login identity** (`authenticate()` looks up by email) | No direct use | **Yes — recipient address** (`NotificationService` line 58-65) | Editing affects next login + all future emails; needs uniqueness check + format validation (existing `FILTER_VALIDATE_EMAIL` pattern in `data/register.php` reusable) |
+| `phone` | Yes | No | No | Shown on admin request details | No | NULL-able, no format validation exists today (F-06); lowest-risk editable candidate |
+| `role` | Yes (label) | No | **Yes — authorization** via session | N/A | N/A | Must remain admin-controlled; never student-editable |
+| `password_hash` | No | No (no change flow exists) | **Yes — credential** | N/A | N/A | Must stay a separate current-password-verified flow, not part of a generic info form |
+| Account Status badge | Yes ("Active") | N/A — static text, no backing column | No | No | No | Decorative; any real status feature would need schema work (out of scope) |
+
+### 9. Option A — Remove/Relabel
+Removing (or relabeling to e.g. a "Back to Dashboard" link) eliminates a dead affordance with a ~5-line markup-only change and zero backend, schema, validation, or security surface. Tradeoffs: page copy "Manage your account and contact information." (line 10) would also need adjusting since the page would be explicitly view-only; students lose nothing functional (nothing works today); any future need to correct names/phones/emails stays a manual admin/DB task; the F-05-adjacent null-guard consideration on this page is orthogonal and unaffected.
+
+### 10. Option B — Implement Profile Editing
+Would require designing and building: a form + POST handler (e.g. names + phone as the plausible editable set), following project conventions — `requireRole('student')`, `user_id`-scoped `UPDATE users ... WHERE user_id = ?`, CSRF token check, prepared statements, server-side validation, and JSON/error responses matching sibling handlers. Fields needing extra care: `email` (UNIQUE collision check mirroring `data/register.php:48-62`, login-identity impact, notification-recipient impact), `student_id` (UNIQUE + institutional-identity implications — likely admin-only if ever), `role`/`user_id` (must be excluded server-side even if posted), `password` (separate verified flow, not bundled). Reusable helpers already in the codebase: CSRF (`generateCsrfToken`/`validateCsrfToken`), PDO wrappers (`getRow`/`insertRow`), `FILTER_VALIDATE_EMAIL`, duplicate-check query pattern, `htmlspecialchars` output escaping. Effort is a small feature, not a one-line fix, and needs validation/edge-case design (stale-session handling, email-change confirmation policy).
+
+### 11. Security Considerations
+No partial implementation exists to review, so there is nothing insecure to fix. The dead button itself creates no request and is not a vulnerability. Any future Option B handler must include: authentication, `user_id` ownership scoping, CSRF, prepared statements, input validation, `uk_email`/`uk_student_id` collision handling, and must never accept `role`/`user_id`/`password_hash` from the client. Note (pre-existing, outside this decision): `profile.php:20` echoes `$user['role']` without `htmlspecialchars`, unlike every other field on the page.
+
+### 12. P10-005–P10-009 Regression Check
+All intact, verified by marker search (no files modified): P10-005 — sidebar lines 71/76 both `my_requests.php`; P10-007 — Paid guard message present `data/submit_payment.php:49`; P10-008 — `$minAdvance` lines present `data/get_slots.php:32` and `data/save_appointment.php:63`; P10-009 — `encodeURIComponent` present `admin/request_details.php:204`. `php -l profile.php` clean; `data/` listing confirms no profile handler appeared.
+
+### 13. Recommended Decision Inputs
+Factual tradeoffs for the owner (no ranking): (a) Today the button promises management the page cannot deliver, while the header copy reinforces that promise — either the affordance or the copy must change for honesty. (b) The lowest-risk data corrections students plausibly need are phone and name spelling; both are display-only elsewhere and have no auth impact. (c) Email editing is the highest-blast-radius self-service field (login identity + notification routing + UNIQUE constraint). (d) Student ID looks institutional and UNIQUE; self-service changes there risk record-integrity issues. (e) Password has no flow at all (legacy JS points at a non-existent endpoint), so any "account management" expectation larger than info-editing expands scope further. (f) Option A costs a markup tweak with no new attack surface; Option B costs a designed, validated, tested feature with ongoing maintenance.
+
+### 14. Final Owner Decision Required
+OWNER DECISION REQUIRED:
+A. Remove/relabel "Update Information"
+OR
+B. Implement functional profile editing
+OWNER DECISION REQUIRED:
+A. Remove/relabel "Update Information"
+OR
+B. Implement functional profile editing
+OR
+C. Other: __________
+- **Status**: AUDIT COMPLETE — AWAITING OWNER DECISION (no code or data changed)
+
+---
+## P10-011 — Profile Editing Specification & Security Design Audit (AUDIT ONLY, nothing implemented)
+
+Owner decision recorded: **B — Implement functional profile editing.** This section is the implementation specification for a future build task. All statements below are grounded in the actual codebase as inspected; no code, schema, or data was changed.
+
+### 1. Audit Status
+Complete. Static inspection of `profile.php`, `class/Auth.php` (session/auth), `class/NotificationService.php`, `data/register.php` (validation conventions), `data/auth_login.php`, all `$_SESSION` writers, all `student_id` references, `admin/` page inventory, `data/` handler inventory, and `database/phase1_schema.sql`. Read-only only.
+
+### 2. Current Profile Architecture
+`profile.php` (51 lines): `requireRole('student')` via `layouts/student_header.php`, then `$user = $auth->getCurrentUser()` (fresh DB read by `user_id` on every load). Display-only grid: avatar initials, full name, role label, Student ID, email, phone (fallback `'Not provided'`), static "Active" badge. Dead `Update Information` button (P10-010). No form, no handler, no `UPDATE users` anywhere in modern PHP, no admin user-management page (`admin/` has dashboard/requests/appointments/payments/documents only), no password-change endpoint (`data/update_password.php` does not exist; `assets/js/admin.js` reference is orphaned legacy).
+
+### 3. Field-by-Field Analysis
+- **A. `first_name` (VARCHAR(100) NOT NULL):** display only (greeting, avatar, admin lists, `[Student Name]` email placeholder). No auth/ownership role. Editable with low risk.
+- **B. `last_name` (VARCHAR(100) NOT NULL):** same as first_name in every respect.
+- **C. `email` (VARCHAR(150) NOT NULL, UNIQUE `uk_email`):** login identity (`Auth::authenticate()` looks up `WHERE email = ?`); notification recipient (`NotificationService` re-reads by `user_id` at send time, so routing follows the new value immediately); next-login identifier. Editable only with format + uniqueness enforcement; highest blast radius of the editable set.
+- **D. `phone` (VARCHAR(20) NULL):** display only (profile, dashboard, admin request details). Optional at registration, zero format validation anywhere (F-06). Lowest-risk editable candidate.
+- **E. `student_id` (VARCHAR(50) NULL, UNIQUE `uk_student_id`):** never used in auth or ownership predicates (all are `user_id`-based); used in admin display/search and dashboard/profile display only. Functionally safe to change, but it is the institutional identifier — self-service edits risk record-integrity confusion. Specification: read-only for students; changes through an administrator (no admin user-edit UI exists today, so that itself would be a separate future build).
+- **F. `role` (VARCHAR(20), default 'student'):** authorization source, cached in `$_SESSION['role']` at login. Must never be client-editable; server must exclude it regardless of posted input.
+- **G. `password_hash` (VARCHAR(255) NOT NULL):** credential (`password_hash`/`password_verify`, `PASSWORD_DEFAULT`). Must never be part of a profile-info form; password change stays a separate current-password-verified flow (none exists today — separate future feature, not this one).
+
+### 4. Proposed Editable Fields
+`first_name`, `last_name`, `phone`, and `email` — subject to owner confirmations in §19. All other columns excluded server-side even if posted.
+
+### 5. Read-Only Fields
+`user_id` (immutable identity), `student_id` (institutional identity, admin-mediated), `role` (authorization), `password_hash` (separate flow), `created_at`/`updated_at` (system-managed), decorative "Active" badge (no backing column).
+
+### 6. Email Change Analysis
+Current use: login lookup key; notification `To` resolved live per send; duplicate-checked only at registration (`data/register.php:48-62`, same `student_id OR email` pattern reusable with a `user_id != ?` exclusion for self). Session stores no email (`$_SESSION` holds only `user_id`, `role`, `csrf_token` — verified across all writers), so an email change needs no session refresh and does not log the user out; it takes effect at next login and for all future notifications. Normalization: registration does not lowercase/trim beyond `trim()` — a future handler should at minimum `trim()` and apply identical `FILTER_VALIDATE_EMAIL` checks; case-normalization policy is an owner decision. Verification/confirmation mail: **no infrastructure exists** (no token columns, no verification flow, mail transport itself is unconfigured per P9-021) — do not promise verification in the first implementation; whether to notify the old address is likewise an owner decision.
+
+### 7. Student ID Analysis
+Appears in: `getCurrentUser()` select, profile/dashboard display, `admin/request_details.php`, `admin/requests.php` search/display. Appears in no authentication, ownership, payment, appointment, or notification-routing logic. UNIQUE constraint requires collision handling if ever edited. Specification: keep read-only on the student side; administrator-mediated changes only (no such UI exists — separate future scope if ever wanted).
+
+### 8. Password Analysis
+Hashing `password_hash(..., PASSWORD_DEFAULT)` (`data/register.php:65`); verification `password_verify` (`class/Auth.php:95`); no helper methods beyond `authenticate()`; session fixation-safe regeneration at login; no change/reset endpoint, no reset tokens, no reset emails. Specification: password remains entirely separate from profile editing unless the owner explicitly requests a follow-up feature.
+
+### 9. UI/UX Specification
+Preserve the existing card: header, avatar row, 2-column grid (`grid-cols-1 md:grid-cols-2`), brutalist borders/shadows, `break-words` on long values. Recommended minimal pattern consistent with sibling modals (`request_document.php`, `payments.php`): reuse the read-only card, convert the dead button into an `Edit Information` toggle that swaps the four value `<p>` elements for bordered inputs prefilled with current values, revealing Save (yellow) + Cancel (white) controls in the existing footer row; disable Save with `Submitting...` state during POST (same convention as request/payment forms); success via `alert()` + reload (project convention), validation errors via `alert()` or inline field messages; no unsaved-changes framework (page is single-purpose). Must hold at 390px (stacked inputs, full-width buttons), 768px, and 1440px (existing grid), keeping `break-words`/`min-w-0` behavior for long emails/names.
+
+### 10. Security Specification
+Future handler (e.g. `data/update_profile.php` — name illustrative only) must: require POST; validate CSRF via `$auth->validateCsrfToken()`; require login + `requireRole('student')`; scope the update with `WHERE user_id = ?` bound to `$_SESSION['user_id']`; use prepared statements exclusively; **whitelist exactly the approved editable columns** (mass-assignment prevention — ignore/reject anything else, especially `role`, `user_id`, `password_hash`, `student_id`); run all §11 validation server-side; check `uk_email` collision excluding self; return the project JSON envelope (`valid`/`msg`); escape all re-rendered values with `htmlspecialchars`.
+
+### 11. Validation Specification
+Trim all inputs. `first_name`/`last_name`: required, non-empty after trim, max 100 chars (schema-bound; no stricter rule exists today — any profanity/format policy is an owner decision). `email`: required, `FILTER_VALIDATE_EMAIL`, max 150 chars, uniqueness vs all other users (owner to decide on case-normalization). `phone`: optional (nullable today — empty stores NULL/empty per convention decision), max 20 chars; no format regex exists in the project and none should be invented without owner approval (F-06 context). Lengths above are the only maxima the schema supports; anything stricter needs an explicit owner rule.
+
+### 12. Database Update Specification
+Conceptual only (not created): single `UPDATE users SET first_name = ?, last_name = ?, email = ?, phone = ? WHERE user_id = ?` — including only owner-approved columns — preceded by the uniqueness SELECT; no transaction strictly required for a single-row single-statement write (existing handlers use plain prepared writes except the appointment capacity race); on failure return generic user message and log server-side per existing `error_log` convention; affected-row handling: treat write success as success (values may be identical); never expose SQL text to the client.
+
+### 13. Session Considerations
+Verified: session holds `user_id`, `role`, `csrf_token` only — email/names/phone are never cached, always re-read. Therefore profile edits require no session refresh, no regeneration, and no forced re-login. (If `role` were ever editable, which it must not be via this flow, re-login would be required since `requireRole` trusts the cached value.)
+
+### 14. Notification Considerations
+No account-change notification types or templates exist (types are `request_*`/`appointment_*`/`payment_*` only). Email edits automatically reroute future notifications via the live recipient lookup — no code change needed for that. Whether an edit should itself emit an in-app notification, email the old/new address, or do nothing at all is an owner decision; infrastructure for verification mail does not exist (§6).
+
+### 15. Error/Success Behavior
+SUCCESS: row updated → `{"valid":true}` → alert + reload showing new values. VALIDATION FAILURE: `{"valid":false}` with field-specific message, no write, entered values preserved client-side. DUPLICATE EMAIL: clear "already in use" message, no write. DATABASE FAILURE: generic message, no partial update, server-side log. CSRF FAILURE: standard invalid-token rejection. UNAUTHENTICATED: existing `requireRole('student')` redirect semantics.
+
+### 16. Responsive Requirements
+Baseline is the P10-003 profile/sidebar work (off-canvas nav, wrapping rows, `break-words`). Edit mode must preserve all of it: full-width inputs at 390px, stacked Save/Cancel, wrapped error text, intact hamburger/backdrop/Escape behavior. No CSS architecture changes.
+
+### 17. Regression Requirements
+Must not break: login/logout, dashboard, request creation, request ownership, appointment scheduling (P10-008 advance + capacity logic), payment tracking (P10-007 Paid guard), notifications, all admin list/detail views, student sidebar (P10-005 routing), mobile navigation, admin remarks encoding (P10-009). The profile read path (`getCurrentUser()` column list) must keep returning every field current consumers use.
+
+### 18. Future Implementation Plan
+1. Owner confirms editable-field policy (§19). 2. Edit-mode UI on `profile.php` (no new pages). 3. CSRF-protected handler with field whitelist. 4. Server-side validation per §11. 5. Uniqueness checks. 6. Scoped single-row update. 7. Success/error states per §15 (no session work needed per §13). 8. Auth/session regression tests. 9. 390/768/1440 responsive pass. 10. Full student-workflow + admin-view regression (§17). 11. Bug-log entry on implementation.
+
+### 19. Owner Decisions Required
+A. Students edit first name? (code: safe — owner confirms) B. Students edit last name? (code: safe — owner confirms) C. Students edit email? (code: feasible with checks — blast radius noted) D. Students edit phone? (code: safe — owner confirms) E. Student ID remains read-only? (spec says yes — owner confirms) F. Password stays separate? (spec says yes — owner confirms) G. Email verification required? (no infrastructure — owner decides; default: not in first build) H. Notify old/new address on email change? (owner decides) I. In-app notification on profile change? (owner decides; none exists) J. Admin student-profile editing? (no UI exists — owner decides scope/timing).
+- **Status**: SPECIFICATION COMPLETE — AWAITING OWNER APPROVAL. NO APPLICATION CODE IMPLEMENTED. NO DATABASE RECORDS MODIFIED. NO DATABASE SCHEMA MODIFIED.

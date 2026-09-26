@@ -201,7 +201,7 @@ $refNumber = sprintf("SPVAI-%s-%07d", $year, $requestId);
 $(document).on('submit', '#form-update-status', function(e) {
     e.preventDefault();
     var formData = $(this).serialize();
-    formData += '&remarks=' + $('#admin-remarks').val();
+    formData += '&remarks=' + encodeURIComponent($('#admin-remarks').val());
 
     var submitBtn = $(this).find('button[type="submit"]');
     submitBtn.prop('disabled', true).text('Updating...');
