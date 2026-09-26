@@ -58,6 +58,17 @@ if ($auth->getRow($dupSql, [$requestId])) {
 // 6. Server-side Availability Check & Transactional Insert
 $config = require('../config/appointments.php');
 
+// P10-008: enforce the configured minimum advance booking days (calendar dates).
+// This check runs after auth/ownership/eligibility/duplicate validation and before any write.
+$minAdvance = (int)($config['scheduling_rules']['min_advance_days'] ?? 1);
+$appTimestamp = strtotime($appDate);
+$earliestDate = strtotime('+' . $minAdvance . ' days', strtotime(date('Y-m-d')));
+
+if ($appTimestamp === false || $appTimestamp < $earliestDate) {
+    echo json_encode(['valid' => false, 'msg' => 'Appointments must be booked at least ' . $minAdvance . ' day(s) in advance. Please choose a later date.']);
+    exit();
+}
+
 try {
     // Use a transaction to prevent race conditions/overbooking
     $auth->Begin();

@@ -42,7 +42,13 @@ if (!$req) {
 
 // 5. Handle Payment Record
 // Check if record already exists
-$pay = $auth->getRow("SELECT payment_id FROM payments WHERE request_id = ?", [$requestId]);
+$pay = $auth->getRow("SELECT payment_id, payment_status FROM payments WHERE request_id = ?", [$requestId]);
+
+// P10-007: a Paid payment is final and cannot be resubmitted by the student.
+if ($pay && ($pay['payment_status'] ?? '') === 'Paid') {
+    echo json_encode(['valid' => false, 'msg' => 'This payment has already been verified and cannot be submitted again.']);
+    exit();
+}
 
 try {
     if ($pay) {

@@ -28,6 +28,15 @@ if ($timestamp < $today) {
     exit();
 }
 
+// P10-008: enforce the configured minimum advance booking days (calendar dates).
+$minAdvance = (int)($config['scheduling_rules']['min_advance_days'] ?? 1);
+$earliest = strtotime('+' . $minAdvance . ' days', $today);
+
+if ($timestamp < $earliest) {
+    echo json_encode(['valid' => false, 'msg' => 'Appointments must be booked at least ' . $minAdvance . ' day(s) in advance. Please choose a later date.']);
+    exit();
+}
+
 if (!in_array($dayOfWeek, $config['scheduling_rules']['allowed_days'])) {
     echo json_encode(['valid' => false, 'msg' => 'The Records Office is closed on this day.']);
     exit();
