@@ -332,3 +332,20 @@ Must not break: login/logout, dashboard, request creation, request ownership, ap
 ### 19. Owner Decisions Required
 A. Students edit first name? (code: safe — owner confirms) B. Students edit last name? (code: safe — owner confirms) C. Students edit email? (code: feasible with checks — blast radius noted) D. Students edit phone? (code: safe — owner confirms) E. Student ID remains read-only? (spec says yes — owner confirms) F. Password stays separate? (spec says yes — owner confirms) G. Email verification required? (no infrastructure — owner decides; default: not in first build) H. Notify old/new address on email change? (owner decides) I. In-app notification on profile change? (owner decides; none exists) J. Admin student-profile editing? (no UI exists — owner decides scope/timing).
 - **Status**: SPECIFICATION COMPLETE — AWAITING OWNER APPROVAL. NO APPLICATION CODE IMPLEMENTED. NO DATABASE RECORDS MODIFIED. NO DATABASE SCHEMA MODIFIED.
+
+---
+## P10-012 — Student Profile Editing Implementation
+- **Files Changed**: `profile.php` (read-only card → `form#form-profile` with prefilled inputs + inline message box + Save/Cancel; layout, brutalist styling, grid, avatar row, read-only Student ID/Status untouched).
+- **Files Created**: `data/update_profile.php` (dedicated POST handler, project conventions: POST-only, CSRF, `{"valid","msg"}` JSON envelope, PDO prepared statements via `$auth` helpers).
+- **Editable Fields**: `first_name`, `last_name`, `email`, `phone` — explicit fixed-column SQL, no dynamic column construction (mass-assignment prevention).
+- **Read-Only Fields**: `user_id` (session-only, never from client), `student_id`, `role`, `password_hash`, timestamps — never referenced in the UPDATE; verified immune to posted overrides.
+- **Validation**: trim all; names required ≤100; email required ≤150 + `FILTER_VALIDATE_EMAIL`; phone optional ≤20, empty stored as NULL (nullable column); no invented regexes.
+- **Email Uniqueness**: `WHERE email = ? AND user_id <> ?` pre-check with clear error and no write, plus 1062/duplicate fallback in catch without leaking SQL.
+- **Email Behavior**: DB holds new value; future login + notifications follow it (live lookups); session untouched (caches no email) so no logout — verified `LOGIN_NEW_EMAIL=OK` with pre-change password.
+- **CSRF/Auth/Ownership**: CSRF token required/validated; login + `role === 'student'` enforced with JSON rejection; update scoped `WHERE user_id = ?` from session only.
+- **Database Update**: single `UPDATE users SET first_name=?, last_name=?, email=?, phone=? WHERE user_id=?`; no schema change; no new tables/columns.
+- **UI Behavior**: Save posts via AJAX with `Saving...` state; inline green/red message box (no alert dependency); success refreshes header name + avatar initials live; Cancel is a plain `profile.php` reload link (no write). Read-only Student ID/Status preserved; responsive grid and sidebar intact.
+- **Testing Performed**: `php -l` clean on both files + full sweep zero errors; inline JS passes `node --check`; live round-trip with two disposable students through the real handler — success update persisted, duplicate/invalid/blank/long-phone rejected with exact messages, empty phone stored NULL, mass-assignment POST (`role=admin`, `student_id=HACKED`, `password_hash`, foreign `user_id`) left role/student_id/peer untouched, bad-CSRF/unauthenticated/wrong-method rejected; both disposables deleted afterward (residue 0 verified). Browser click-through at 390/768/1440 not available here — recommended on owner side.
+- **Regression Checks**: P10-005 (sidebar → `my_requests.php`), P10-007 (Paid guard), P10-008 (`$minAdvance` in both endpoints), P10-009 (`encodeURIComponent`) all present; no other workflow files touched.
+- **Limitations**: No email verification, no account-change notifications, no password flow, no admin editing (all per approval). Pre-existing `profile.php:20` unescaped role echo left untouched.
+- **Status**: FIXED
