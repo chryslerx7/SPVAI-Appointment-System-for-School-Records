@@ -41,7 +41,7 @@ A simple session-based CSRF token system is implemented in `class/Auth.php`.
 - `student_area.php`: Secure landing page for authenticated students.
 - `data/register.php`: Backend registration handler.
 - `data/auth_login.php`: Backend student authentication handler.
-- `test_auth.php`: Programmatic verification script.
+- `test_auth.php`: Programmatic verification script. (REMOVED in P10-019 — it was web-accessible without authentication and created test/admin accounts on every load. Historical reference only; do not recreate under the web root.)
 
 ## 8. Files Modified
 - `data/login.php`: Fixed broken instantiation and added MD5 migration logic for admins.

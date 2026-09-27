@@ -532,3 +532,72 @@ All actually performed, read-only: full directory listings (root, admin, data, c
 ### 12. Files Changed
 `PHASE10_BUG_LOG.md` only (this entry). If `git status` shows anything else, it is pre-existing P10-016 work, not this audit.
 - **Status**: AUDIT COMPLETE — AWAITING OWNER APPROVAL. NOTHING DELETED, RENAMED, MOVED, OR REWRITTEN.
+
+---
+## P10-018 — Web-Reachable Schema / Setup Utility Audit (AUDIT ONLY, nothing executed/modified/moved)
+
+### 1. Scope
+Read-only audit of `apply_schema.php`, `database/setup_phase1.php`, `test_auth.php` (full-file reads), plus reference searches, similar-utility sweep, reachability analysis (static/config), `php -l`, and `git status`. The three scripts were NOT executed, no SQL was run from them, no browser HTTP execution test was performed, no records created.
+
+### 2. Utility Inventory
+| Utility | Purpose | HTTP Accessible? | Modifies DB? | Auth? | CSRF? | Modern Dependency? | Recommendation |
+|---|---|---|---|---|---|---|---|
+| `apply_schema.php` (32 lines) | Re-runs `database/phase1_schema.sql` via `Database::insertRow`, plain-text counts | Physically yes (web root, no `.htaccess` anywhere); not linked from any nav | Yes — but current SQL is idempotent (`CREATE IF NOT EXISTS` + `INSERT IGNORE` only) | None | N/A (no state-changing intent beyond schema; no form) | No (unreferenced by all routes) | REMOVE (redundant duplicate of documented `setup_phase1.php`; unneeded post-install) |
+| `database/setup_phase1.php` (44 lines) | Same schema run with HTML progress output; documented install step (`PHASE1_DATABASE.md:81`) | Physically yes (subdirs are web-served too); not linked from any nav | Same idempotent set as above | None | N/A | No runtime dependency (one-time setup only) | MOVE outside web root (preserves reinstall capability, removes HTTP exposure) |
+| `test_auth.php` (88 lines) | Phase 2 auth test harness: registers test users, duplicate-checks, login checks, legacy MD5 migration simulation | Physically yes; not linked from any nav | YES — INSERTs `users` + `user` rows on EVERY hit, no cleanup | None | None | No | REMOVE (known-credential admin creation, see §5) |
+
+### 3. apply_schema.php
+Reads the fixed file `database/phase1_schema.sql` (no `$_GET/$_POST`/request input of any kind — SQL cannot be user-influenced), splits on `;`, executes each chunk through PDO `prepare/execute` (`Database::insertRow`), prints success/error counts. Current SQL file contains only `CREATE TABLE IF NOT EXISTS` (6 modern tables) and `INSERT IGNORE` seeds — no DROP/DELETE/TRUNCATE/ALTER/UPDATE — so a hit today re-applies no-ops. Concrete exposures: (a) any visitor can trigger it (GET, no login); (b) per-query PDO exception text is echoed to the browser (SQL error disclosure). Destructive capability with the CURRENT sql file: none; the risk is exposure + re-runnability, not data loss. Redundant: byte-equivalent purpose to `setup_phase1.php`.
+
+### 4. setup_phase1.php
+Same mechanism and same SQL source as §3 (relative `phase1_schema.sql`, resolves on direct URL hit), with HTML output that additionally echoes the first 50 chars of each query plus error text (wider error/query disclosure than `apply_schema.php`). This is the documented install procedure, so it had an operational purpose at install time; post-install it serves none. Same auth posture (none) and same idempotent-impact profile. Relative `require_once('Database.php')` works on direct hit.
+
+### 5. test_auth.php
+Highest-concern finding, established statically (script NOT executed): every load performs live writes — Test 1 INSERTs a `users` row (random test student), Test 7 INSERTs a legacy `user` row AND a `users` row with `role='admin'`, email `migration_test@spvai.edu.ph`, password = known literal `admin123` (lines 69-81), with no cleanup and no uniqueness guard on repeat hits beyond UNIQUE-constraint failures. I.e., an unauthenticated GET creates a working admin account with public credentials (first hit succeeds; later hits fail loudly but the account persists). It also drives `$_SESSION` via `Auth::authenticate`. No login, no role check, no CSRF, no method restriction. Not referenced by any route, form, JS, or doc procedure (only mentioned descriptively in `PHASE2_AUTHENTICATION.md:44` and the P10-010/011 evidence lists).
+
+### 6. Similar Utilities
+Swept `setup|install|migrat|seed|debug|diagnos|repair|reset|fix|drop|truncate` + `file_get_contents|exec|shell_exec|system|passthru|eval|.sql` across all PHP: the ONLY SQL-file executors are the two §3/§4 scripts; no shell-exec/eval anywhere. `test.php` (2-line uniqid echo) and `data/test.php` (lorem ipsum) are inert. `Connection.php:38-39` debug lines are commented out. `spvaii.sql` (6680 B root dump of legacy table structures, e.g. `accomodation`) is inert reference material, not executed by any code (Apache may serve it as text — ownerURL hygiene note only).
+
+### 7. HTTP Reachability
+Physically accessible: YES for all three — no `.htaccess` exists anywhere in the project (glob confirms), standard XAMPP serves every `.php` under web root including `database/`, so `/SPVAI/apply_schema.php`, `/SPVAI/database/setup_phase1.php`, `/SPVAI/test_auth.php` are directly requestable. Navigationally reachable: NO — zero links/forms/AJAX/docs-procedures (except the setup doc's one-time install instruction) point at them. No HTTP execution test was performed; the conclusion rests on file placement + absence of access controls, which is conclusive for physical reachability.
+
+### 8. Database Modification Capability
+`apply_schema.php` / `setup_phase1.php`: CAN execute whatever `phase1_schema.sql` contains — currently only idempotent CREATE-IF-NOT-EXISTS + INSERT-IGNORE (verified by full read of the 133-line schema file in P10-017). `test_auth.php`: DOES write on every load (test users + known-credential admin, §5). None accepts user input into SQL (all statements use bound params or fixed file content).
+
+### 9. Authentication/Authorization/CSRF
+All three: no `isLoggedIn`, no `requireRole`, no CSRF token, no method check (all run on plain GET). CSRF is moot (no session-victim flow — damage is direct, not forged). Session impact: only `test_auth.php` touches `$_SESSION` (via `authenticate`). Error disclosure: `apply_schema.php` echoes exception messages; `setup_phase1.php` echoes query fragments + exceptions; `test_auth.php` echoes failure messages including exception text.
+
+### 10. Modern Dependency Check
+The current SPVAI application does NOT depend on any of the three at runtime: no `require/include`, no AJAX `url:`, no form action, no nav link in either layout or any page references them (exhaustive filename + basename grep; only doc mentions and this log). Public/student/admin flows operate entirely without them. `setup_phase1.php` retains one-time operational value for fresh installs (hence MOVE, not REMOVE).
+
+### 11. Risk Assessment (concrete, no inflation)
+- `test_auth.php`: HIGH if left web-reachable — unauthenticated creation of a known-password admin account plus junk rows per hit (static certainty; never executed to prove it). Latent only while the URL is unvisited, but trivially discoverable.
+- `apply_schema.php` / `setup_phase1.php`: LOW with current SQL (idempotent re-run + error/query disclosure to anonymous visitors). Would escalate only if the SQL file ever gains destructive statements — a change-control note, not a current impact.
+- No evidence of prior exploitation was sought or found (out of scope; logs not inspected).
+
+### 12. Recommended Actions (NOT implemented — owner approval required)
+- `test_auth.php` → REMOVE (delete in a controlled task after confirming no dev still needs it; CLI re-creation is trivial if ever required).
+- `apply_schema.php` → REMOVE (redundant with the documented `setup_phase1.php`; serves no post-install purpose).
+- `database/setup_phase1.php` → MOVE outside web root (keeps fresh-install capability, kills HTTP exposure; update `PHASE1_DATABASE.md` install step accordingly). DISABLE acceptable alternative.
+- Incidental: consider suppressing direct `.sql` serving when hardening (incidental hygiene, owner call).
+
+### 13. Owner Decisions Required
+Approve each recommendation above (REMOVE / REMOVE / MOVE), plus whether to inspect access logs for prior hits to `test_auth.php` (suggested, not performed), and whether any freshly-installed environments still need the setup script before it is moved.
+- **Status**: AUDIT COMPLETE — SECURITY ISSUE DOCUMENTED, NOT FIXED. NOTHING EXECUTED, MOVED, OR DELETED.
+
+---
+## P10-019 — Security Utility Cleanup & Installer Relocation
+- **Status**: FIXED / COMPLETE
+- **Pre-change verification**: Re-read all three utilities and re-ran repo-wide reference searches — confirmed NO PHP `require/include`, AJAX, form, nav, or JS references to `test_auth.php`, `apply_schema.php`, or `setup_phase1.php` (only doc mentions + prior log entries). No unexpected runtime dependency found, so implementation proceeded.
+- **Files Removed**: `test_auth.php` (deleted — unauthenticated web-accessible harness that INSERTed test users plus a known-credential admin account on every load; HIGH risk eliminated at the source). `apply_schema.php` (deleted — redundant, unauthenticated browser-accessible schema re-runner; documented setup path already existed elsewhere). Neither was replaced; no new test/schema endpoint was introduced under any name.
+- **Files Moved**: `database/setup_phase1.php` → `C:\xampp\SPVAI-setup\setup_phase1.php` (outside the Apache document root `C:\xampp\htdocs`, hence not HTTP-accessible by construction). Body byte-identical except a header comment + two `__DIR__`-anchored path adaptations (`Database.php` require, `phase1_schema.sql` path) so it stays runnable via CLI (`php C:\xampp\SPVAI-setup\setup_phase1.php`). No schema/query/output logic changed. `php -l` clean on the moved copy.
+- **Files Modified (docs only)**: `PHASE1_DATABASE.md` setup section now documents CLI execution from the new location, one-time/manual-only status, and warns against copying it back into the web root (incl. `apply_schema.php` removal note). `PHASE2_AUTHENTICATION.md` `test_auth.php` line marked REMOVED-in-P10-019 (historical record retained, clearly deprecated). No application code touched.
+- **Security Result**: The HIGH-risk `test_auth.php` exposure is eliminated — the file no longer exists under the web root, so no request can trigger its account-creating code path. Schema re-execution is no longer browser-triggerable from any path (`apply_schema.php` gone, `setup_phase1.php` outside docroot).
+- **Web Accessibility Result (live HTTP-tested, Apache running)**: `/SPVAI/test_auth.php` → 404, `/SPVAI/apply_schema.php` → 404, `/SPVAI/database/setup_phase1.php` → 404. Nothing was executed to prove this — 404 on the deleted paths is the expected and sufficient signal.
+- **Reference Verification**: Post-change repo-wide grep for `test_auth|apply_schema|database/setup_phase1` in `*.php` returns zero application references (only `.md` history + this log). `git status` shows exactly: `D apply_schema.php`, `D database/setup_phase1.php`, `D test_auth.php`, `M PHASE10_BUG_LOG.md`, `M PHASE1_DATABASE.md`, `M PHASE2_AUTHENTICATION.md`.
+- **PHP Syntax**: Full-project recursive `php -l` sweep — ZERO errors. Moved copy individually clean.
+- **Regression Smoke Test (live HTTP)**: `public_home.php` → 200 landing; `index.php`, `admin/dashboard.php`, `student_area.php` logged-out → 302 redirects (guards intact). No missing includes possible: no modern file ever included the removed/moved utilities (verified pre- and post-change).
+- **Database Safety**: NO database writes performed by P10-019 — no INSERT/UPDATE/DELETE/DDL; the moved setup script was NOT executed; `phase1_schema.sql` untouched. All DB contact was read-only (`SHOW TABLES` lineage + the SELECTs below).
+- **Existing Test Admin Account**: REPORTED, NOT REMOVED (per approval rule). Read-only check confirms BOTH rows still exist: `users` id=4 (`migration_test@spvai.edu.ph`, role=admin) and legacy `user` id=3 (`migration_test`); `USERS_TOTAL=5`. Deleting either row requires separate owner approval — recorded here as a remaining observation, not actioned.
+- **Access Log Recommendation**: Owner should review Apache access logs for historical hits to `/SPVAI/test_auth.php` (would indicate past harness runs and possible test-account creation). No exploitation is claimed — logs were not inspected in this phase.
+- **Scope Check**: No other files removed, no legacy travel/DB-table cleanup, no auth/RBAC/CSRF/schema/workflow/UI changes. Strictly the three P10-018 recommendations.

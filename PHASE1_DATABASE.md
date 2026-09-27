@@ -73,11 +73,14 @@ The following legacy tables were preserved for backward compatibility:
 
 ---
 
-## 5. Setup Instructions
+## 5. Setup Instructions (P10-019: installer relocated out of the web root)
 
-To apply the Phase 1 database schema:
+To apply the Phase 1 database schema (one-time/manual setup ONLY — NOT part of normal runtime):
 
 1. Ensure your XAMPP/Apache/MySQL services are running.
-2. Navigate to: `http://localhost/SPVAI/database/setup_phase1.php` in your browser.
+2. From a controlled local/deployment environment, run:
+   `php C:\xampp\SPVAI-setup\setup_phase1.php`
+   (relocated in P10-019 from `database/setup_phase1.php`; it is intentionally NOT reachable via `http://localhost/SPVAI/...`).
 3. The script will execute `database/phase1_schema.sql` and report the results.
 4. Once complete, the new tables will be available in the `spvaii` database.
+5. Do NOT copy the setup script back into the web root. The redundant browser-accessible `apply_schema.php` was removed in P10-019.
