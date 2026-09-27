@@ -130,6 +130,7 @@ P10-005 regression verified intact: `layouts/student_header.php:76` Appointments
 - **Recommended Future Fix**: Add the three dedicated templates reusing surrounding phrasing/placeholders (`ref`, `remarks`/`date`/`time`/`amount`/`method` as appropriate). No handler logic change needed.
 - **Implementation Required**: No (audit only)
 - **Notes**: Email delivery itself still depends on SMTP configuration; templates and transport are separate issues.
+- **Update (P10-016)**: FIXED — the three dedicated templates were added (`class/NotificationService.php`) plus the minimum `remarks` addition to payment `$emailData` (`admin/update_payment.php`). See P10-016 entry below. Status now FIXED.
 
 ### P10-004-08 — Admin remarks containing & and = characters
 - **ID**: P10-004-08
@@ -379,3 +380,155 @@ A. Students edit first name? (code: safe — owner confirms) B. Students edit la
 - **Regression**: P10-005/007/008/009/012 markers all present; no business-logic files touched.
 - **Remaining**: legacy "Back To Home" links documented above (owner decision if ever wanted); no new owner decisions required by this task.
 - **Status**: FIXED
+
+---
+## P10-015 — Notification Email Template Audit (AUDIT ONLY, no code/data changes)
+
+### 1. Scope
+Verify whether the three email-template gaps reported in P10-004-07 (`request_cancelled`, `appointment_cancelled`, `payment_rejected` falling back to a generic email) are still present in the current code, and whether each notification type is actually reachable through current SPVAI workflows. Audit only — no application code modified, no templates added, no triggers/statuses/UI/auth changed.
+
+### 2. Files Inspected
+`class/NotificationService.php` (full, 131 lines — `notifyUser`, `createInAppNotification`, `sendEmailNotification`, `getTemplate`), `config/notifications.php` (SMTP/from config only, no templates), `admin/update_status.php` (full, 104 lines), `admin/update_appointment.php` (full, 85 lines), `admin/update_payment.php` (full, 88 lines), `notifications.php` (in-app list rendering), `data/mark_read.php` (ownership-checked read handler), `data/submit_payment.php` (student payment submit, no notifications emitted), `admin/request_details.php:163-194` (status dropdown), `admin/appointments.php:138-150` (status dropdown), `admin/payments.php:160-172` (status dropdown). Repo-wide searches for `NotificationService|notifyUser|getTemplate`, all `*_cancelled`/`payment_rejected`/`payment_paid` keys, all `UPDATE requests|appointments|payments SET` writers, and all `cancel|Cancel` references. `php -l` on all five notification files (clean). `git log` on the four notification files (untouched since Phase 09).
+
+### 3. Current Notification Type Inventory
+Only three callers of `NotificationService` exist in the entire project: `admin/update_status.php:95-96`, `admin/update_appointment.php:76-77`, `admin/update_payment.php:79-80`. All follow the same pattern: build `$type` + `$emailKey` via a status `switch`, fetch `$template = getTemplate($emailKey, $emailData)`, then `notifyUser($details['user_id'], <request_id>, $type, $msg, $template)`. No student-side file emits notifications (`data/submit_payment.php`, `data/save_appointment.php` send none). Template selection is a plain array lookup with a generic fallback (`NotificationService.php:127`): `['subject' => 'SPVAI Notification', 'body' => 'Message regarding your request.']` — no exception, no log, silent downgrade.
+
+| Notification (in-app `type` / email key) | Trigger | Reachable? | In-App | Email | Dedicated Template | Fallback |
+|---|---|---|---|---|---|---|
+| `request_approved` | `admin/update_status.php:69` (status `Approved`) | Yes — admin dropdown `request_details.php:174` + whitelist `update_status.php:36` | Yes | Yes | A. Dedicated (`SPVAI Document Request Approved`) | — |
+| `request_rejected` | `admin/update_status.php:70` (status `Rejected`, remarks required) | Yes — dropdown `:175` + whitelist | Yes | Yes | A. Dedicated (`Rejected`, includes remarks) | — |
+| `request_processing` | `admin/update_status.php:71` | Yes — dropdown `:176` + whitelist | Yes | Yes | A. Dedicated | — |
+| `request_ready` | `admin/update_status.php:72` (adds appointment info when present) | Yes — dropdown `:177` + whitelist | Yes | Yes | A. Dedicated (optional `app` line) | — |
+| `request_completed` | `admin/update_status.php:73` | Yes — dropdown `:178` + whitelist | Yes | Yes | A. Dedicated | — |
+| `request_cancelled` | `admin/update_status.php:74` (status `Cancelled`) | Yes — dropdown `:179` + whitelist `:36` includes `Cancelled`; no student-side cancel path exists (cancel is admin-only, but reachable) | Yes | Yes (generic) | MISSING | B. Generic fallback (`SPVAI Notification` / `Message regarding your request.`) |
+| `appointment_confirmed` | `admin/update_appointment.php:64` (status `Confirmed`) | Yes — admin dropdown `appointments.php:146` + whitelist `:36` | Yes | Yes | A. Dedicated (includes date/time) | — |
+| `appointment_cancelled` | `admin/update_appointment.php:65` (status `Cancelled`) | Yes — dropdown `appointments.php:148` + whitelist includes `Cancelled`; student cannot cancel (no student cancel endpoint; `appointments.php`/`save_appointment.php` only create) | Yes | Yes (generic) | MISSING | B. Generic fallback |
+| (`Scheduled`/`Completed`/`No Show` appointments) | `admin/update_appointment.php:63-66` switch | Intentionally silent — switch maps only `Confirmed`/`Cancelled`, `$type` stays empty, no notification at all | No (by design) | No | C. No email sent (no trigger) | — |
+| `payment_paid` (in-app) / `payment_verified` (email key alias) | `admin/update_payment.php:68` (status `Paid`) | Yes — admin dropdown `payments.php:169` + whitelist `:36` | Yes | Yes | A. Dedicated via alias (email key `payment_verified` exists; only the in-app `type` string differs) | — |
+| `payment_rejected` | `admin/update_payment.php:69` (status `Rejected`) | Yes — dropdown `payments.php:170` + whitelist includes `Rejected` | Yes | Yes (generic) | MISSING | B. Generic fallback |
+| (`Unpaid`/`Pending Verification`/`Refunded` payments) | `admin/update_payment.php:67-70` switch | Intentionally silent — no mapping, no notification | No (by design) | No | C. No email sent (no trigger) | — |
+| (`Pending` request status) | `admin/update_status.php:68-75` switch | Intentionally silent — no mapping, no notification | No (by design) | No | C. No email sent (no trigger) | — |
+
+### 4. Template Inventory
+`getTemplate()` (`NotificationService.php:95-128`) defines exactly 7 dedicated templates: `request_approved`, `request_rejected`, `request_processing`, `request_ready`, `request_completed`, `appointment_confirmed`, `payment_verified`. Emitted email keys total 10 distinct strings across the three callers; of those, `request_cancelled`, `appointment_cancelled`, `payment_rejected` miss the map and receive the generic fallback subject `SPVAI Notification` with body `Message regarding your request.` (note: the body contains no `[Student Name]` placeholder, so no name substitution occurs for these three; all other templates substitute the recipient's `first_name`). `payment_paid` is safe solely because its email key aliases to the existing `payment_verified` template. `config/notifications.php` holds only SMTP/from-address settings — no template content lives there.
+
+### 5. Previous Finding Comparison (P10-004-07)
+- **`request_cancelled`**: Still missing. No template added; `update_status.php:74` still emits `$emailKey = 'request_cancelled'`; whitelist (`:36`) and admin dropdown (`request_details.php:179`) still include `Cancelled`, so the trigger is reachable (admin-only; no student cancel path exists anywhere — verified by zero student-side `UPDATE requests` writers). Falls back to generic email; in-app notification still created. No behavior change since the earlier audit.
+- **`appointment_cancelled`**: Still missing. No template added; `update_appointment.php:65` unchanged; whitelist (`:36`) and admin dropdown (`appointments.php:148`) still include `Cancelled`, so reachable (admin-only; students can only create appointments via `save_appointment.php`, never cancel). Falls back to generic email; in-app still created. No behavior change.
+- **`payment_rejected`**: Still missing. No template added; `update_payment.php:69` unchanged; whitelist (`:36`) and admin dropdown (`payments.php:170`) still include `Rejected`, so reachable whenever an admin rejects a payment. Falls back to generic email; in-app still created. No behavior change.
+- `git log` confirms none of `class/NotificationService.php`, `admin/update_status.php`, `admin/update_appointment.php`, `admin/update_payment.php` changed since Phase 09 — P10-004-07 is intact and accurate, not stale.
+
+### 6. Reachability of Each Missing-Template Type
+All three are reachable today, exclusively through admin actions: request `Cancelled` via `admin/request_details.php` form → `admin/update_status.php`; appointment `Cancelled` via `admin/appointments.php` modal → `admin/update_appointment.php`; payment `Rejected` via `admin/payments.php` modal → `admin/update_payment.php`. Each path is CSRF-protected, admin-role-gated, and whitelist-validated, with a visible UI control exposing the status — none requires direct-POST trickery. No student-triggerable path produces any of the three keys. `Cancelled` remains a supported request status end-to-end (whitelist, dropdown, `request_details.php:37` Rejected/Cancelled display branch, dashboard `NOT IN ('Completed','Cancelled')` counts, scheduler `forbiddenStatuses`).
+
+### 7. Security Observations
+No security regression found. Adding templates later requires no weakening of anything: all three triggers sit behind POST-only + `validateCsrfToken` + `isLoggedIn` + `$_SESSION['role'] === 'admin'` guards with prepared statements throughout. Email recipients are resolved server-side (`NotificationService.php:58-59`: `SELECT email, first_name FROM users WHERE user_id = ?`) from the request owner's stored row — never from POST data. Callers derive `user_id`/`request_id` from server-side JOINs on the target record, not from client-supplied user identity. `update_status.php` performs no per-request ownership check, but that is correct for an admin endpoint (admins manage all requests). Student-owned paths verified intact: `data/submit_payment.php` scopes by `user_id` (+ P10-007 Paid guard), `data/mark_read.php` enforces `notification_id` + `user_id` ownership (IDOR-safe). In-app message rendering in `notifications.php:30,33` is `htmlspecialchars`-escaped. Pre-existing note (unchanged, out of scope): the generic fallback itself is silent — no log distinguishes a fallback send from a templated send.
+
+### 8. Live/Read-Only Tests Performed
+Static/source inspection only — no live test claimed. (a) `php -l` clean on `class/NotificationService.php`, `admin/update_status.php`, `admin/update_appointment.php`, `admin/update_payment.php`, `config/notifications.php`. (b) Repo-wide reference searches confirming exactly 3 `NotificationService` callers, 7 template keys vs 10 emitted email keys, zero student-side notification writers, and zero student-side cancel endpoints. (c) `git status` clean before edit (only this log modified afterward); `git log` shows notification files untouched since Phase 09. No test data created, no records modified, no email sent — live send was deliberately avoided (mail transport behavior already covered by P9-021; template selection is fully determined by static code).
+
+### 9. Findings
+1. P10-004-07 CONFIRMED STILL OPEN — all three keys (`request_cancelled`, `appointment_cancelled`, `payment_rejected`) still miss `getTemplate()` and receive the generic `SPVAI Notification` email. Concrete impact: for each of the three transitions, the in-app notification is created normally and an email IS still attempted, but the email carries only the generic subject/body (no reference number, document, date/time, amount, or reason) — degraded information, not a lost notification and not an error.
+2. All three triggers are reachable via supported admin UI controls (not dead code).
+3. No new missing-template gaps introduced; every other emitted key resolves to a dedicated template.
+4. No security regression; future templates need only map entries reusing already-passed `$emailData`.
+- **Severity**: Low (same as P10-004-07 — notification delivered, content generic; no auth/data/transaction impact)
+
+### 10. Recommended Next Action
+In a future implementation task (NOT this audit): add the three dedicated templates in `getTemplate()` only — `request_cancelled` (reuse `ref`/`doc`/`remarks`), `appointment_cancelled` (reuse `ref`/`doc`/`date`/`time`), `payment_rejected` (reuse `ref`/`amount`/`method` + `remarks`, which the caller does not yet pass and would need adding to `$emailData`). No handler, trigger, status, UI, auth, or schema change is needed. Awaiting owner approval to proceed.
+- **Status**: AUDIT COMPLETE (P10-004-07 remains OPEN; nothing fixed, nothing implemented)
+
+---
+## P10-016 — Implement Dedicated Notification Email Templates
+- **Objective**: Resolve P10-004-07 (confirmed by P10-015 audit) by adding dedicated email templates for `request_cancelled`, `appointment_cancelled`, and `payment_rejected`, preserving the existing notification architecture.
+- **Files Modified**:
+  - `class/NotificationService.php` (+12 lines): three new entries in `getTemplate()`'s `$templates` map, following the existing subject/body/placeholder conventions exactly (raw interpolation + `??` fallbacks, `[Student Name]` placeholder, `Records Office<br>SPVAI` signature). All 7 pre-existing templates byte-identical; generic fallback line untouched; `notifyUser`/`sendEmailNotification`/deduplication/mail handling untouched.
+  - `admin/update_payment.php` (+1 line): added `'remarks' => $remarks` to `$emailData` so the rejection reason reaches the template. `$remarks` is the existing POST-derived variable (line 28) already saved to the DB — no new query, no workflow/status change. Reference number deliberately NOT added (beyond the authorized minimum; `SELECT p.*` already holds it if a future task wants it).
+  - No change needed in `admin/update_status.php` (already passes `ref`/`doc`/`remarks`) or `admin/update_appointment.php` (already passes `ref`/`doc`/`date`/`time`); triggers, whitelists, dropdowns, and the `payment_paid → payment_verified` alias all untouched.
+- **Templates Added**:
+  - `request_cancelled` — subject `SPVAI Document Request Cancelled`; body states the request `ref` was cancelled, names the `doc`, shows `Remarks` (fallback `No remarks provided`), portal next-step line, Records Office signature.
+  - `appointment_cancelled` — subject `SPVAI Appointment Cancelled`; body states the appointment for `ref` was cancelled, shows `date`/`time`, rescheduling-contact line, signature. No remarks line (caller does not pass remarks; kept strictly to existing `$emailData` per scope).
+  - `payment_rejected` — subject `SPVAI Payment Rejected`; body states the payment for `ref` was rejected, shows `amount`/`method`, shows `Reason` from the newly-passed remarks (fallback `No reason provided`), portal resubmission line, signature.
+- **Tests Performed** (all actually run): `php -l` on both modified files (clean) + full-project recursive `php -l` sweep (zero errors); throwaway resolution script (temp dir, deleted after) evaluating the real `$templates` literal with representative `$emailData` — 15/15 PASS: 3 new keys resolve to dedicated templates, all 7 existing keys still dedicated, unknown keys still hit the generic fallback, `payment_rejected` remarks with `&`/`=`/empty/HTML pass through intact, subjects match convention. `git diff` confirms purely additive changes (no existing line altered except the one-line `$emailData` addition).
+- **Payment Remarks Transport**: `admin/payments.php` serializes the whole form via jQuery `serialize()` (remarks textarea is inside the form; no manual string concat unlike the fixed P10-004-08 pattern), so `&`/`=` are URL-encoded at transport — no corruption path. Template interpolation is server-side string concat (same as existing `request_rejected`), so special chars cannot break template selection.
+- **Live Testing Limitation**: No live end-to-end notification run (no disposable DB records created, no email sent). Template generation/selection: TESTED (above). `mail()` invocation and actual delivery: NOT tested — local XAMPP SMTP is unconfigured (known P9-021 context); delivery remains environment-dependent as before. Business-transaction safety is unchanged by construction: `notifyUser` creates the in-app row first and email soft-fails via `@mail` + log, and neither path was touched.
+- **Regression Checks**: P10-005 (sidebar routing), P10-007 (Paid guard), P10-008 (`$minAdvance` both endpoints), P10-009 (`encodeURIComponent`), P10-012 (profile handler) markers all still present (notification files are the only ones touched; `git status` shows exactly `class/NotificationService.php`, `admin/update_payment.php`, this log).
+- **Security**: No findings. Recipient still resolved server-side from `users` by `user_id`; no email address from POST; admin/CSRF/prepared-statements/dedup/mail-failure handling untouched; remarks follow the existing raw-interpolation pattern used by all templates (no new escaping model introduced, no new exposure — remarks were already stored and shown in-app/admin views).
+- **Status**: FIXED (P10-004-07 resolved; P10-015 audit goal completed)
+
+---
+## P10-017 — Legacy / Dead-Code Cleanup Audit (AUDIT ONLY, nothing deleted/renamed/moved)
+
+### 1. Audit Scope
+Full read-only inventory: root + `admin/`, `data/`, `class/`, `config/`, `database/`, `interface/`, `layouts/`, `php/`, `admin/modal/`, `assets/`, `css/`, `js/`, `library/`, `images/`. Repo-wide reference searches (filenames, `require/include`, AJAX `url:`, nav `href=`, asset `src|href`, table names in SQL), nav/link reachability traces from both modern layouts, live read-only `SHOW TABLES` on `spvaii`. No files deleted/renamed/moved, no tables touched, no logic changed.
+
+### 2. Modern Active Code (A. ACTIVE MODERN — do not touch in cleanup)
+Root: `index.php` (pure router), `public_home.php`, `login.php`, `register.php`, `logout.php`, `student_area.php`, `request_document.php`, `request_confirmation.php`, `my_requests.php`, `request_details.php`, `appointments.php`, `appointment_confirmation.php`, `payments.php`, `notifications.php`, `profile.php`. Admin: `dashboard.php`, `requests.php`, `request_details.php`, `appointments.php`, `payments.php`, `documents.php`, `index.php` (login), `logout.php`, `update_status.php`, `update_appointment.php`, `update_payment.php`, `update_document_fee.php`. Data (all AJAX/form-called by modern pages): `auth_login.php` (student login), `login.php` (admin login + legacy MD5 migration), `register.php`, `create_request.php` (NOT dead — `request_document.php:101`), `get_slots.php` (NOT dead — `appointments.php:99`), `save_appointment.php`, `submit_payment.php`, `mark_read.php`, `update_profile.php`. Infra: `class/Auth.php`, `class/NotificationService.php`, `config/appointments.php`, `config/notifications.php`, `database/Database.php` + `database/Connection.php` (shared chain), all 4 `layouts/*` (sole nav source; zero legacy links), `assets/js/jquery-3.1.1.min.js` + `assets/js/bootstrap.min.js` (loaded by modern footers/login/register/admin-index AND legacy pages — shared), `assets/css/bootstrap.min.css`, `images/spvai.ico`.
+
+### 3. Legacy Still Referenced (B. LEGACY BUT STILL REFERENCED — reachable only inside the legacy module, NOT from modern nav)
+| File/Component | Referenced By | Reachable From Modern App? | Classification |
+|---|---|---|---|
+| `reserved.php` | nothing modern (docs only); requires `data/get_origin.php`, `data/get_destination.php`; AJAX `data/session_itinerary.php` | No | B (legacy entry; internally chained) |
+| `accomodation.php` | `data/session_itinerary.php` returns url `accomodation.php`; requires `data/get_all_accomodations.php`; AJAX `data/session_accomodation.php` | No | B |
+| `passenger.php` | `data/session_accomodation.php` returns url `passenger.php`; requires `admin/modal/message.php`; AJAX `data/save_booked.php` | No | B |
+| `payment.php` (travel) | `data/save_booked.php:35` returns url `payment.php`; requires `data/depart_from_to.php`, `data/get_accomodation.php`, `data/getBooked.php` (x2) | No | B |
+| `admin/reservation.php` + `admin/transaction.php` | cross-link each other (Reserved/History tabs); require `admin/session_login.php` + modal files; AJAX `data/get_all_book.php`, `deleteBook.php`, `getBookBy.php`, `save_transaction.php`, `get_all_transaction.php`, `refundTen.php` | No (modern admin nav has Dashboard/Requests/Appointments/Payments/Documents only) | B (self-contained legacy admin subsystem) |
+| `admin/session_login.php` | required by the two legacy admin pages only | No | B (legacy guard; note self-`require_once` no-op line 2) |
+| `admin/modal/message.php`, `confirmation.php` | required by legacy reservation/transaction (+passenger uses message) | No | B |
+| `admin/modal/view_passenger.php` | required by `admin/transaction.php:50` only | No | B |
+| `class/Book.php` + `interface/iBook.php` | required by legacy data handlers (`deleteBook`, `getBookBy`, `getPassengers`, `get_all_book`, `save_transaction`); queries `booked` | No | B (legacy shared class) |
+| `class/Transaction.php` + `interface/iTransaction.php` | required by `get_all_transaction.php`, `refundTen.php`, `save_transaction.php`; queries `transaction` | No | B (legacy shared class) |
+| Legacy data handlers (`save_booked`, `save_transaction`, `deleteBook`, `getBookBy`, `getPassengers`, `get_all_book`, `get_all_transaction`, `refundTen`, `session_accomodation`, `session_itinerary`, `depart_from_to`, `get_origin`, `get_destination`, `get_accomodation`, `get_all_accomodations`, `getBooked`, `getRemainingAcc`) | referenced only by the legacy pages above | No | B (legacy-internal; remove only as a set) |
+| `user` (legacy table) | ACTIVE `data/login.php:42,62` legacy-MD5 lookup + post-migration DELETE; `test_auth.php:74,77` harness | YES — modern admin login path | B (see §6; NOT removable while migration code exists) |
+| `assets/css/bootstrap-theme.min.css`, `simple-sidebar.css`, `dataTables.bootstrap.min.css`, `assets/js/jquery.dataTables.min.js`, `dataTables.bootstrap.min.js` | loaded only by legacy pages (travel + reservation/transaction) | No | B (legacy-only assets) |
+
+### 4. Likely Dead / Cleanup Candidates (C/D — no modern reference, no modern navigation, not shared infra)
+| File/Component | Evidence | Modern Reference? | Classification |
+|---|---|---|---|
+| `php/notify.php`, `php/sendmail.php` | zero `require`/AJAX/`href` from any page (`sendmail` named only in unloaded `js/common.js`); hardcoded `vijayanpp02@gmail.com` contact-form mailers predating `NotificationService` | None | D. SAFE CANDIDATE (as a pair; nothing includes them) |
+| `js/common.js` | references `php/sendmail.php`; not loaded (`<script src>`) by any PHP page | None | D. SAFE CANDIDATE |
+| `class/User.php` + `interface/iUser.php` | targets legacy `user` table; only self-instantiation (`new User()` at file bottom); no page/handler requires it (P10-010 confirmed) | None | D. SAFE CANDIDATE (as a pair; table itself stays — see §6) |
+| `root css/` (10 files), `root js/` (11 files), `library/` (bootstrap, font-awesome, jquery-1.11.3, prettyPhoto, modernizr, owl, vegas) | zero `src|href` references from any PHP page (legacy pages use `assets/`, modern use Tailwind CDN + `assets/`); `images/spva.jpg|spva1.jpg` referenced only inside dead root `css/` | None | D. SAFE CANDIDATE (whole dirs; legacy theme remnants) |
+| `assets/js/admin.js` | loaded by no page; content points at non-existent `data/update_password.php` (P10-010 orphaned legacy JS) | None | D. SAFE CANDIDATE (single file; other `assets/js` files stay) |
+| `assets/js/bootstrap.js`, `jquery-1.12.3.js`; `assets/css/bootstrap.css`, `bootstrap-theme.css` (unminified twins) | minified/3.1.1 variants are the loaded ones; twins unreferenced | None | D. SAFE CANDIDATE (keep loaded variants) |
+| `assets/css/form-login.css` | no page links it (`form-login` hits are element IDs, not the file) | None | D. SAFE CANDIDATE |
+| `test.php` (root, 2-line `uniqid` echo), `data/test.php` (lorem ipsum, not PHP) | unreferenced placeholders | None | D. SAFE CANDIDATE |
+| ``data/create_request.php` `` (trailing-backtick stray) | P10-004-09 documented; only `data/create_request.php` is referenced | None | D. SAFE CANDIDATE (delete backtick file only) |
+| `C?xampphtdocsSPVAIPHASE9_BUG_LOG.md` (root, 3321 B, 66 lines, P9-001 fragment) | mangled-filename duplicate of Phase 9 log content; unreferenced | None | D. SAFE CANDIDATE (stray doc fragment) |
+| `status` (DB table) | exists live; zero `FROM/INTO status` references in any PHP | None | D. candidate at DB level (see §6) |
+
+### 5. Ambiguous Items (E. AMBIGUOUS — OWNER DECISION REQUIRED, do not delete on this audit's authority)
+1. Whole legacy travel module + legacy admin subsystem + their tables (`reserved/accomodation/passenger/payment.php`, `admin/reservation.php`, `admin/transaction.php`, `admin/session_login.php`, `admin/modal/*`, `class/Book|Transaction.php`, `interface/iBook|iTransaction.php`, 17 legacy data handlers, tables `booked`, `transaction`, `accomodation`, `destination`, `origin`): individually B, but GROUP removal needs owner sign-off (direct-URL reachability = anyone can still open them; P10-014 noted their Home links now land on the login router). Also `admin/reservation.php:53` requires `admin/modal/view_booker.php`, which DOES NOT EXIST — that legacy page is already fatally broken, supporting dormancy but still owner call.
+2. `test_auth.php` (Phase 2 auth harness, writes/reads `user` table), `apply_schema.php`, `database/setup_phase1.php`: unreferenced dev/ops utilities. `apply_schema.php` is web-reachable with NO auth and executes schema SQL — keep-or-restrict is a security decision (see §10), not a plain deletion.
+3. `assets/css/input.css` + `package.json`/`node_modules/`/`tailwind.config.js`: Tailwind build pipeline whose output (`output.css`) was never built and no page links; runtime uses CDN. Remove pipeline vs keep for future builds — owner + deployment decision.
+4. `spvaii.sql` (root dump), `PHASE*.md` docs, `DEV_ADMIN_LOCAL.md`: reference material, harmless. Keep (owner may archive separately).
+5. `user` table retention after the last legacy admin migrates (see §6).
+
+### 6. Legacy Database Tables (live `SHOW TABLES` on `spvaii`, read-only — 13 tables)
+| Table | Modern Usage | Legacy Usage | Candidate for Future Removal? | Evidence |
+|---|---|---|---|---|
+| `users`, `document_types`, `requests`, `appointments`, `payments`, `notifications` | YES — all modern workflows | No | NO (modern core) | phase1_schema + every modern query |
+| `user` | YES — `data/login.php:42,62` MD5-migration lookup + delete | `class/User.php`, `test_auth.php` | NO (not while migration code is live; re-audit after removal of that path) | active login file lines cited |
+| `booked` | None | `class/Book.php`, `getBooked.php`, `save_booked.php`, `get_all_accomodations.php`, `getRemainingAcc.php`, `session_accomodation.php` | GROUP decision with module (§5.1) | SQL grep; live table present |
+| `transaction` | None | `class/Transaction.php`, `save_transaction.php` | GROUP decision with module | SQL grep; live table present |
+| `accomodation`, `destination`, `origin` | None | `get_accomodation(s).php`, `get_origin.php`, `get_destination.php`, `depart_from_to.php`, `save_booked.php` | GROUP decision with module | SQL grep; live tables present |
+| `status` | None found (zero PHP references of any kind) | None found | YES — cleanest single-table candidate, owner to confirm no external tool reads it | exhaustive `FROM/INTO status|status_id` search empty; live table present |
+
+### 7. Assets / Libraries
+Still loaded (KEEP): Tailwind CDN (all modern pages), `assets/js/jquery-3.1.1.min.js` + `assets/js/bootstrap.min.js` (modern footers/login/register/admin-index + legacy pages), `assets/css/bootstrap.min.css` (both worlds), `images/spvai.ico` (all worlds). Legacy-only (see §3/§4): DataTables set, `simple-sidebar.css`, `bootstrap-theme.min.css`. Unloaded (see §4): root `css/`+`js/`+`library/`, `assets/js/admin.js`, unminified twins, `form-login.css`, `js/common.js`. Build pipeline dormant (`input.css` source present, `output.css` never built, CDN used instead) — §5.3.
+
+### 8. Modern Workflow Dependency Check
+The modern SPVAI workflow (public_home → login/register → student_area → request → history → details → appointment → payment → notifications → profile; admin login → dashboard → requests/details → appointments → payments → documents) depends on NO legacy travel file, NO legacy data handler, and NO legacy table except `user` (sole exception: the admin-login MD5 migration path in `data/login.php`). Both nav layouts link exclusively to modern pages. Reference direction is one-way legacy→modern (`index.php` Home links) — deleting legacy files cannot break any modern page (no modern `require`/AJAX/`href` points at them; verified by exhaustive search).
+
+### 9. Recommended Cleanup Order (FUTURE task only — NOT implemented)
+1. Owner approval gate (especially §5.1 module-group + §5.2 `apply_schema.php` handling). 2. Zero-risk file strays: backtick `data/create_request.php``, mangled Phase-9-log filename, `test.php`, `data/test.php`. 3. Dead pairs: `php/notify.php`+`sendmail.php`, `js/common.js`, `class/User.php`+`interface/iUser.php`, `assets/js/admin.js`, unminified twins, `form-login.css`. 4. Dead dirs: root `css/`, `js/`, `library/` (verify no direct-URL/bookmark reliance first). 5. `status` table (single-table drop, confirm no external readers). 6. LAST: legacy module group (pages + legacy admin + legacy data handlers + Book/Transaction classes + their tables) + `user`-table/migration-path retirement as one coordinated decision. Each step: backup → remove → `php -l` sweep → smoke-test modern student+admin flows → log.
+
+### 10. Security
+Two observations (REPORTED ONLY, not fixed): (a) `apply_schema.php` is web-reachable with no authentication and executes `database/phase1_schema.sql` statements on hit — restrict/delete is an owner decision; (b) `php/notify.php`/`sendmail.php` contain a hardcoded third-party gmail and take unvalidated `$_POST` mail input, but are fully unreachable (no page references them) — risk is latent, removed with the files in a future cleanup. Legacy travel/admin pages perform no ownership checks of their own, but they touch only legacy tables and are unreachable from modern nav. No modern auth/session/RBAC/CSRF issue found during this audit.
+
+### 11. Tests
+All actually performed, read-only: full directory listings (root, admin, data, class, config, layouts, database, interface, library, assets/css+js, css, js, images, admin/modal); repo-wide greps (legacy filenames; `require/include`; `common.js|admin.js|notify.php`; `create_request|refundTen|…` handler names; `css/|js/|images/` asset refs; `output.css|input.css|tailwind`; all legacy table names in SQL; `FROM status|status_id`; nav `href=` in both layouts); file-head reads (`php/notify.php`, `php/sendmail.php`, `test.php`, `data/test.php`, `apply_schema.php`, `setup_phase1.php`, `session_login.php`, `Connection.php`, `data/login.php`, `phase1_schema.sql`); live read-only `SHOW TABLES` (13 tables, temp script deleted); `git status` confirms working tree otherwise untouched by this audit. No live page loads, no writes, no deletions; `php -l` sweep not re-run (no code modified).
+
+### 12. Files Changed
+`PHASE10_BUG_LOG.md` only (this entry). If `git status` shows anything else, it is pre-existing P10-016 work, not this audit.
+- **Status**: AUDIT COMPLETE — AWAITING OWNER APPROVAL. NOTHING DELETED, RENAMED, MOVED, OR REWRITTEN.

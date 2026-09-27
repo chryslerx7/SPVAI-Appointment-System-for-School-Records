@@ -122,6 +122,18 @@ class NotificationService extends Database {
                 'subject' => 'SPVAI Payment Verified',
                 'body' => '<p>Hello [Student Name],</p><p>Your payment for request <strong>' . ($data['ref'] ?? '') . '</strong> has been verified.</p><p><strong>Amount:</strong> ₱' . ($data['amount'] ?? '0.00') . '<br><strong>Method:</strong> ' . ($data['method'] ?? '') . '</p><p>Records Office<br>SPVAI</p>'
             ],
+            'request_cancelled' => [
+                'subject' => 'SPVAI Document Request Cancelled',
+                'body' => '<p>Hello [Student Name],</p><p>Your document request <strong>' . ($data['ref'] ?? '') . '</strong> has been cancelled.</p><p>Document: ' . ($data['doc'] ?? '') . '</p><p><strong>Remarks:</strong><br>' . ($data['remarks'] ?? 'No remarks provided') . '</p><p>You may view your request in the SPVAI portal for more information.</p><p>Records Office<br>SPVAI</p>'
+            ],
+            'appointment_cancelled' => [
+                'subject' => 'SPVAI Appointment Cancelled',
+                'body' => '<p>Hello [Student Name],</p><p>Your appointment for request <strong>' . ($data['ref'] ?? '') . '</strong> has been cancelled.</p><p><strong>Date:</strong> ' . ($data['date'] ?? '') . '<br><strong>Time:</strong> ' . ($data['time'] ?? '') . '</p><p>You may contact the Records Office for assistance with rescheduling.</p><p>Records Office<br>SPVAI</p>'
+            ],
+            'payment_rejected' => [
+                'subject' => 'SPVAI Payment Rejected',
+                'body' => '<p>Hello [Student Name],</p><p>Your payment for request <strong>' . ($data['ref'] ?? '') . '</strong> was rejected.</p><p><strong>Amount:</strong> ₱' . ($data['amount'] ?? '0.00') . '<br><strong>Method:</strong> ' . ($data['method'] ?? '') . '</p><p><strong>Reason:</strong><br>' . ($data['remarks'] ?? 'No reason provided') . '</p><p>You may submit a new payment through the SPVAI portal.</p><p>Records Office<br>SPVAI</p>'
+            ],
         ];
 
         return $templates[$type] ?? ['subject' => 'SPVAI Notification', 'body' => 'Message regarding your request.'];

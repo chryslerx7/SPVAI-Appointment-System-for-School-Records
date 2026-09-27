@@ -74,7 +74,8 @@ try {
             $emailData = [
                 'ref' => $refNum,
                 'amount' => number_format($details['amount'], 2),
-                'method' => $details['payment_method']
+                'method' => $details['payment_method'],
+                'remarks' => $remarks
             ];
             $template = $notificationService->getTemplate($emailKey, $emailData);
             $notificationService->notifyUser($details['user_id'], $details['request_id'], $type, $msg, $template);
