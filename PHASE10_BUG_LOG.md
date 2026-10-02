@@ -601,3 +601,67 @@ Approve each recommendation above (REMOVE / REMOVE / MOVE), plus whether to insp
 - **Existing Test Admin Account**: REPORTED, NOT REMOVED (per approval rule). Read-only check confirms BOTH rows still exist: `users` id=4 (`migration_test@spvai.edu.ph`, role=admin) and legacy `user` id=3 (`migration_test`); `USERS_TOTAL=5`. Deleting either row requires separate owner approval — recorded here as a remaining observation, not actioned.
 - **Access Log Recommendation**: Owner should review Apache access logs for historical hits to `/SPVAI/test_auth.php` (would indicate past harness runs and possible test-account creation). No exploitation is claimed — logs were not inspected in this phase.
 - **Scope Check**: No other files removed, no legacy travel/DB-table cleanup, no auth/RBAC/CSRF/schema/workflow/UI changes. Strictly the three P10-018 recommendations.
+
+---
+## P10-020 — Migration/Test Account Dependency Audit (AUDIT ONLY, no database writes)
+- **Status**: AUDIT COMPLETE — NOTHING DELETED, MODIFIED, OR DISABLED. Both accounts left intact for a separately-approved P10-021.
+- **Database Safety**: NO database writes performed — SELECT/SHOW/DESCRIBE only. No INSERT/UPDATE/DELETE/DDL. Removed utilities (`test_auth.php`, `setup_phase1.php`, `apply_schema.php`) were NOT executed. No login attempted with any test credential. No password read, reset, or echoed (password_hash never selected).
+- **Method**: repo-wide grep (`migration_test`, `migration_test@spvai.edu.ph`, numeric `user_id/id = 3|4` with context review, `test_auth|apply_schema|setup_phase1`, `INSERT INTO users|user`, `MD5|md5|migration|seed`, `test account|admin123`-class terms); full reads of `data/login.php`, `class/Auth.php`, `class/User.php`, `database/phase1_schema.sql`, `spvaii.sql` (user section), `PHASE2_AUTHENTICATION.md`, `DEV_ADMIN_LOCAL.md`; read-only DB checks against live `spvaii` (columns below); Apache `access.log` read for `test_auth|apply_schema|setup_phase1`.
+
+### Modern migration account
+- `users.user_id = 4` EXISTS. `email = migration_test@spvai.edu.ph`, `role = admin`, `first_name = migration_test`, `last_name = Admin`, `student_id = NULL`, `phone = NULL`, `created_at = updated_at = 2026-09-14 09:56:18` (password_hash deliberately not selected).
+- **Classification (evidence-based)**: development/test migration account — name + email match the removed `test_auth.php` Test-7 harness pattern documented in P10-018/P10-019; NULL student_id/phone and Sept-2026 creation are inconsistent with a real student/staff record. `USERS_TOTAL = 5` (ids 1, 4, 5, 6, 7 present).
+- **Application references**: NONE. `migration_test[@spvai.edu.ph]` appears in-repo only in `DEV_ADMIN_LOCAL.md:18` (descriptive pre-existing-account note, explicitly "left untouched") and in this log's P10-018/P10-019 history (lines ~556, ~601). Zero hits in any `*.php`/`*.js`/`*.sql`/`*.html`/config. Numeric `id/user_id = 4` matches are only this log's line ~601 plus unrelated jQuery chromium/bugzilla comment ids — no code hardcodes user 4.
+- **Authentication dependency**: NONE. `class/Auth.php :: authenticate()` is a generic `WHERE email = ?` + `password_verify` lookup (lines 91-106); `data/auth_login.php` and `data/login.php` pass through caller-supplied credentials with no hardcoded email. No seed in `database/phase1_schema.sql` creates this row (only `document_types` seeds); `spvaii.sql:151-153` seeds only legacy `admin`/`admin2`, proving this row came from a runtime harness run, not from install data. `data/register.php` hardcodes `role='student'` and is unrelated.
+- **Data dependencies (all zero)**: `requests WHERE user_id = 4` = 0; `appointments JOIN requests WHERE r.user_id = 4` = 0; `payments JOIN requests WHERE r.user_id = 4` = 0; `payments WHERE verified_by = 4` = 0; `notifications WHERE user_id = 4` = 0. FKs verified from live schema: `requests.user_id -> users` (CASCADE), `notifications.user_id -> users` (CASCADE), `payments.verified_by -> users` (SET NULL). Deleting user 4 therefore cascades to zero rows and orphans nothing.
+- **Security observation**: latent privileged access only. The web-accessible creation mechanism is already gone (P10-019; 404s re-confirmed via access log below). The row itself remains a working `role='admin'` login principal whose test credential was documented in the P10-018 finding — described here without re-echoing it, no login attempted. It holds no application data and is referenced by no logic, so its only remaining risk is reusable known-credential admin access until a controlled removal/rotation.
+
+### Legacy migration account
+- Legacy `user.user_id = 3` EXISTS. `user_account = migration_test` with a 32-char MD5 hash present (full value not reproduced here). Live table structure is exactly `(user_id INT PK AI, user_account VARCHAR(50), user_password VARCHAR(35))` — no email/name/role columns. `user` row count = 2 (`admin2` id=2, `migration_test` id=3).
+- **Classification (evidence-based)**: test/migration counterpart of the modern row — account name matches the removed harness's legacy-INSERT pattern (P10-018 §5); absent from the `spvaii.sql:151-153` install seeds (`admin`, `admin2` only), so likewise runtime-created, not install data.
+- **Legacy references**: NONE structural. `booked` (2 rows), `transaction` (0 rows), `accomodation` (4 rows), `destination`, `origin`, `status` have NO `user_id` column at all (`booked.book_by`/`transaction.trans_passenger` are free-text passenger fields, not FKs). `booked WHERE book_by/name LIKE '%migration%'` = 0; `transaction WHERE trans_passenger LIKE '%migration%'` = 0. `INFORMATION_SCHEMA` confirms zero FKs into/out of legacy `user` (only PRIMARY); the only FKs naming `users` are the three modern ones above. `class/User.php :: loginUser()` reads `user` generically by account name — no hardcoded `migration_test`.
+- **Related record counts**: 0 related rows by every actual schema relationship (there is no direct user-ID relationship to check beyond the LIKE sweeps above, which are also 0).
+
+### Cross-dependency (modern/legacy bridge)
+- Neither account is REQUIRED by the bridge. `data/login.php:40-75` legacy-MD5 migration path is fully generic (lookup by caller-supplied `user_account`, `md5()` compare, derive `<username>@spvai.edu.ph`, INSERT into `users`, DELETE legacy row). It names no specific account.
+- Notable interaction (not a blocker): the bridge DERIVES email `migration_test@spvai.edu.ph` from legacy `migration_test`, which currently COLLIDES with modern id=4 under `uk_email`. If legacy id=3 ever migrated while modern id=4 still exists, the INSERT would fail and fall into the existing catch-block fallback (`data/login.php:68-73`, session still established as admin). Removing modern id=4 first eliminates that collision; removing legacy id=3 eliminates the colliding migrator entirely. Normal student/admin login, modern password verification, and migration of any OTHER legacy admin (e.g. `admin2`) are unaffected by either removal.
+
+### Documentation / development use
+- Actively documented for development: NO. `DEV_ADMIN_LOCAL.md:18` mentions the address only to say pre-existing accounts were left untouched (unknown passwords); the supported local admin is `dev.admin@spvai.edu.ph`. `PHASE2_AUTHENTICATION.md` describes migration generically and marks `test_auth.php` REMOVED-in-P10-019 — it names no test account and gives no testing procedure using these rows. No test plan, seed file, config, or code comment instructs anyone to use them. Status: historical/descriptive only.
+
+### Access logs
+- REVIEWED (current `C:\xampp\apache\logs\access.log`; no rotated logs present). Exactly ONE `test_auth.php` hit exists: `27/Sep/2026:10:34:06 +0800 GET /SPVAI/test_auth.php -> 404` — the P10-019 post-cleanup verification probe, not usage. Same timestamp holds the matching 404 probes for `/SPVAI/apply_schema.php` and `/SPVAI/database/setup_phase1.php`. Zero `200` hits for any of the three paths exist in the current log. No exploitation is claimed; hits predating log retention would not be visible here.
+
+### Recommendation
+- Outcome A: BOTH accounts appear safe to remove in a SEPARATELY-APPROVED P10-021 implementation phase — zero code references, zero authentication dependencies, zero related modern/legacy records, zero FK orphan risk, docs use historical only.
+- Suggested P10-021 order (not executed): backup both rows (`SELECT ... INTO OUTFILE` or mysqldump of the two rows) → delete modern `users.user_id = 4` → delete legacy `user.user_id = 3` → verify `COUNT(*) = 0` for both + re-run the §-dependency counts → smoke-test admin login/migration path. Either order is FK-safe; modern-first additionally clears the `uk_email` collision noted above. Owner approval still required before any write.
+- **Scope Check**: only this log entry changed. No PHP/JS/CSS/HTML/SQL/config/docs touched; no rows inserted/updated/deleted; no schema altered; P10-021 NOT started.
+
+---
+## P10-021 — Migration/Test Account Removal & Verification (CONTROLLED CLEANUP, 2 rows only)
+- **Status**: COMPLETE. Exactly two confirmed disposable rows deleted; nothing else touched. No P10-022 started.
+
+### Removed modern account
+- `users.user_id = 4` (`migration_test@spvai.edu.ph`, role=admin) — classified in P10-020 as development/test migration account. Pre-delete re-verification confirmed exact identity (id 4 / NULL student_id / migration_test Admin / expected email / admin) and zero related records (requests 0, appointments-via-requests 0, payments-via-requests 0, payments.verified_by 0, notifications 0). `DELETE FROM users WHERE user_id = 4` affected exactly 1 row. Credential hash never selected, printed, or recorded in this log.
+
+### Removed legacy account
+- `user.user_id = 3` (`migration_test`) — classified in P10-020 as migration/test counterpart. Pre-delete re-verification confirmed exact identity (id 3 / expected account name) and zero legacy references (booked LIKE-matches 0, transaction LIKE-matches 0, no `user_id` column or FK anywhere in legacy tables). `DELETE FROM user WHERE user_id = 3` affected exactly 1 row. Password hash never reproduced in this log.
+
+### Backup
+- Created BEFORE deletion at `C:\xampp\SPVAI-backups\P10-021_migration_test_accounts.sql` (outside Apache docroot `C:\xampp\htdocs`, outside the git repository, unlinked from the application, not committed). Contains only the two target rows as restore-ready INSERTs (2 INSERTs, identity markers verified present before proceeding). Contents not pasted anywhere; hashes stay in the local backup file only.
+
+### Verification
+- Both targets absent: `users WHERE user_id = 4` = 0, `user WHERE user_id = 3` = 0, `users WHERE email = migration_test@spvai.edu.ph` = 0, `user WHERE user_account = migration_test` = 0. Counts moved `users` 5 -> 4, `user` 2 -> 1 — no other rows changed.
+- No orphans: all post-delete relationship counts 0 (requests/notifications/verified_by/appointments/payments for user 4; booked/transaction LIKE-matches for migration_test).
+- Other accounts unaffected: modern admins now `user_id = 5 (admin@spvai.edu.ph)` and `user_id = 7 (dev.admin@spvai.edu.ph)`; students id 1, 6 intact; legacy `admin2` id=2 intact. DELETEs used exact PK predicates only.
+- Authentication smoke test (no credentials used, no login attempted with any deleted account): `public_home.php` -> 200, `admin/dashboard.php` logged-out -> 302 to `admin/index.php`, `student_area.php` logged-out -> 302 to `login.php` — guards intact. Live credential login was NOT tested (static verification instead, per allowed fallback). No passwords created, changed, or rotated; no test accounts created.
+- Migration-path verification: `data/login.php` untouched (generic MD5-migration logic, no hardcoded account — re-confirmed by unchanged file + P10-020 code read); removal modified no logic. The `uk_email` collision noted in P10-020 (legacy `migration_test` -> derived `migration_test@spvai.edu.ph` vs modern id=4) is now moot — both rows gone, and no code change was needed.
+
+### Repository references
+- Post-removal grep for `migration_test`: only historical mentions remain — `DEV_ADMIN_LOCAL.md:18` (provisioning-time note, historically accurate as written, left untouched per minimal-change rule) and P10-018/P10-019/P10-020 history in this log. Zero active `*.php`/`*.js`/`*.sql`/`*.html`/config references. No doc update was necessary.
+
+### Security result
+- Both unnecessary test/migration admin principals are removed after the P10-020 dependency audit: the known-credential modern admin row and its legacy MD5 counterpart no longer exist, while legitimate admins (modern id 5, 7; legacy admin2) are preserved. The P10-019 web-exposure removal plus this row removal closes both halves (mechanism + principals) of the original finding.
+
+### Scope Check
+- Deleted exactly `users.id=4` + `user.id=3` (1 + 1 rows, single transaction, committed only on exact counts). No other users/requests/appointments/payments/notifications/bookings/transactions/tables touched; no schema, auth/RBAC, CSRF, UI, payment, appointment, or notification changes; no legacy files/tables deleted; no other test/dev accounts removed. Only this log entry changed on disk.
