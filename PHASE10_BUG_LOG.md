@@ -665,3 +665,113 @@ Approve each recommendation above (REMOVE / REMOVE / MOVE), plus whether to insp
 
 ### Scope Check
 - Deleted exactly `users.id=4` + `user.id=3` (1 + 1 rows, single transaction, committed only on exact counts). No other users/requests/appointments/payments/notifications/bookings/transactions/tables touched; no schema, auth/RBAC, CSRF, UI, payment, appointment, or notification changes; no legacy files/tables deleted; no other test/dev accounts removed. Only this log entry changed on disk.
+
+---
+## P10-022 — Remaining Cleanup Candidates Audit (AUDIT ONLY, nothing deleted/modified)
+- **Status**: PASS WITH FINDINGS — audit complete; findings are documented below, nothing was removed. Working tree was clean at start (P10-020/021 committed as `4a19295`).
+- **Rule followed**: INSPECT → TRACE → VERIFY → CLASSIFY → DOCUMENT → STOP. No deletion, move, rename, refactor, or DB write authorized or performed.
+
+### Scope
+Groups A (mail files), B (legacy User class), C (root css/js/library), D (legacy admin/assets), E (test/stray files), F (`status` table), G (legacy travel module), H (legacy tables), I (legacy `user` table + migration path).
+
+### Files audited (exact)
+A: `php/notify.php`, `php/sendmail.php`, `js/common.js`. B: `class/User.php`, `interface/iUser.php` (vs KEEP `class/Auth.php`). C: `css/` (11 entries incl. `color/`), `js/` (11 incl. `yellow.css`), `library/` (7 incl. `bootstrap/`, `font-awesome-4.3.0/`, `vegas/`). D: `assets/js/` (7: `admin.js`, `bootstrap.js`, `bootstrap.min.js`, `jquery-3.1.1.min.js`, `jquery-1.12.3.js`, `jquery.dataTables.min.js`, `dataTables.bootstrap.min.js`), `assets/css/` (8: `bootstrap.css`, `bootstrap.min.css`, `bootstrap-theme.css`, `bootstrap-theme.min.css`, `dataTables.bootstrap.min.css`, `form-login.css`, `input.css`, `simple-sidebar.css`). E: `test.php`, `data/test.php`, `data/create_request.php`` (backtick stray) vs ACTIVE `data/create_request.php`, mangled `C…xampphtdocsSPVAIPHASE9_BUG_LOG.md`. G: `reserved.php`, `accomodation.php`, `passenger.php`, `payment.php`, `admin/reservation.php`, `admin/transaction.php`, `admin/session_login.php`, `admin/modal/` (`confirmation.php`, `message.php`, `view_passenger.php`; NOTE `view_booker.php` absent), `class/Book.php`, `class/Transaction.php`, `interface/iBook.php`, `interface/iTransaction.php`, 17 legacy `data/` handlers.
+
+### Database objects audited
+`status`, `booked`, `transaction`, `accomodation`, `destination`, `origin`, `user` (+ modern `users/requests/appointments/payments/notifications/document_types` for counts/FK boundary).
+
+### Reference findings
+- **A — mail files**: UNREACHABLE. Zero `require`/AJAX/`href`/form/cron refs from any page; only mentions are `js/common.js:122` (itself loaded by no page — zero `<script src>` hits repo-wide) and prior log history. Both files are 24-line contact-form mailers to a hardcoded third-party gmail with unvalidated `$_POST` input (header-injection regex only). No legacy page uses them; modern `NotificationService.php` is the live path. Classification: SAFE FUTURE CLEANUP CANDIDATE (pair + `js/common.js`) pending explicit approval.
+- **B — User class pair**: DEAD. `class/User.php` is required by nothing (only its own `require_once('../interface/iUser.php')` + bottom `new User()` self-instantiation); `loginUser()` targets legacy `user` table but no caller exists — modern auth uses `class/Auth.php`, `data/login.php` migration uses raw SQL, legacy guard uses `Auth`. Classification: SAFE FUTURE CLEANUP CANDIDATE (pair) pending explicit approval. `class/Auth.php`: ACTIVE — KEEP.
+- **C — root dirs**: UNREFERENCED. Zero `*.php` references to root `css/`, `js/`, `library/` (every `css/` hit is `assets/css/`; every `library/`-style hit lives under `node_modules`). Classification: SAFE FUTURE CLEANUP CANDIDATE (whole dirs) pending explicit approval, with direct-URL/bookmark caveat (static search cannot rule out a saved bookmark; low risk, note before removal).
+- **D — assets**: `assets/js/admin.js` loaded by NO page; its `#form-changepassword → ../data/update_password.php` chain is orphaned (endpoint never existed, P10-010). Unminified twins `assets/js/bootstrap.js`, `assets/js/jquery-1.12.3.js`, `assets/css/bootstrap.css`, `assets/css/bootstrap-theme.css`: loaded variants are the `.min`/`3.1.1` ones — twins unreferenced. `assets/css/form-login.css`: no page links it. KEEP (loaded): `jquery-3.1.1.min.js` + `bootstrap.min.js` (modern footers/login/register/admin-index AND legacy pages), DataTables pair (legacy reservation/transaction only), `bootstrap.min.css` (both worlds), `bootstrap-theme.min.css` + `simple-sidebar.css` + `dataTables.bootstrap.min.css` (legacy-only). Classification: `admin.js` + 4 unminified twins + `form-login.css` = SAFE FUTURE CLEANUP CANDIDATES; DataTables/theme/sidebar set = LEGACY — PRESERVE FOR NOW (tied to Group G).
+- **E — strays**: `test.php` (24 B `uniqid` echo; executes trivial code, no DB, unreferenced), `data/test.php` (lorem ipsum, not PHP, unreferenced). Backtick `data/create_request.php``: byte-identical to ACTIVE `data/create_request.php` (`fc /B`: no differences; same 2439 B) — delete backtick copy ONLY; legit handler is live (`request_document.php:101`). Mangled `C…PHASE9_BUG_LOG.md` (3321 B, 66 lines starting mid-file at P9-001 vs real `PHASE9_BUG_LOG.md` 12087 B): accidental path-mangled editor save, unreferenced. Classification: all four SAFE FUTURE CLEANUP CANDIDATES pending explicit approval.
+- **F — `status` table**: EXISTS `(stat_id PK AI, stat_desc)`, 2 rows (`Paid`, `Refunded`). Zero `*.php` references — BUT live FK `transaction_ibfk_4` (`transaction.stat_id → status.stat_id`) EXISTS (verified in `INFORMATION_SCHEMA`; also declared in `spvaii.sql:273`). No triggers/views/routines reference it. Classification: DO NOT REMOVE YET — droppable only together with the Group G/H legacy-table unit (or with its FK explicitly dropped first). This corrects the P10-017 zero-dependency impression at DB level.
+- **G — legacy travel module**: SELF-CONTAINED LEGACY SUBSYSTEM, directly HTTP-reachable. Incoming: no modern nav/layout/form/AJAX link (both layouts link modern pages only); only self-links (`reservation.php↔transaction.php` tabs; `accomodation→passenger→payment` chain via `session_accomodation/session_itinerary/save_booked` AJAX + `payment.php` requires `depart_from_to/get_accomodation/getBooked`; `reserved.php` requires `get_origin/get_destination`). Legacy nav points at modern `index.php` router (Home links) — one-way legacy→modern. Guards: root pages have NO login check (`reserved.php` not even `session_start`); `admin/reservation.php` + `admin/transaction.php` ARE guarded via `admin/session_login.php → requireRole('admin')`. BROKEN (static certainty, not executed): `admin/reservation.php:53` `require_once('modal/view_booker.php')` targets a file that does not exist (modal dir holds only `confirmation/message/view_passenger`) → fatal on direct hit. Uncalled-but-reachable endpoints: `data/getPassengers.php`, `data/getRemainingAcc.php` (no page/modal caller). Classification: LEGACY — PRESERVE FOR NOW; any removal REQUIRES OWNER DECISION as one coordinated unit (pages + legacy admin + modals + Book/Transaction classes + interfaces + 17 handlers).
+- **H — legacy tables**: `booked` 2 rows (free-text passenger data — potentially meaningful history), `transaction` 0, `accomodation` 4, `destination` 1, `origin` 1. Live FK web: `booked→{destination,accomodation,origin}`, `transaction→{accomodation,origin,destination,status}`. Used only by Group G handlers/classes (map in §G); zero modern refs. Classification: LEGACY — PRESERVE FOR NOW; future removal only as one FK-ordered group with backup (never single-table except with FK handling — see §F).
+- **I — `user` table + migration path**: `data/login.php:42,45,62` generic MD5-migration path STILL PRESENT and unchanged. `user` holds 1 row (`admin2` id=2, described without hash); table has zero FKs in/out. Modern `users`: 4 rows (2 admin / 2 student); modern `requests/appts/notifs` hold live data (2/2/7). Classification: REQUIRED FOR MIGRATION while `admin2` is unmigrated — DO NOT REMOVE YET. Retirement needs a separate explicit decision (migrate-or-approve `admin2` first); do NOT assume `admin2` deletable.
+
+### Recommended cleanup order (conservative, each step backup → remove → `php -l` → smoke-test → log → approval)
+1. Strays: backtick file, mangled log fragment, `test.php`, `data/test.php`. 2. Dead pairs: `php/notify+sendmail` + `js/common.js`; `class/User+iUser`; `assets/js/admin.js` + unminified twins + `form-login.css`. 3. Root `css/`+`js/`+`library/` dirs (after bookmark caveat). 4. `status` ONLY inside the legacy-table group (live FK). 5. `user`-table/migration retirement only after the `admin2` decision. 6. LAST: legacy travel module + its tables as one FK-ordered unit. Nothing below is authorized by this audit.
+
+### Security findings (documented, not fixed)
+Latent only: unlinked `php/notify+sendmail` mailers (hardcoded third-party gmail, unvalidated POST) — unreachable but web-accessible; 15 unauthenticated legacy `data/` POST endpoints incl. write paths (`save_booked`, `save_transaction`, `deleteBook`, `refundTen`) and uncalled `getPassengers`/`getRemainingAcc`; public root legacy pages (no login check; legacy admin IS guarded); `spvaii.sql` served as text (schema disclosure, pre-existing note); `test.php` trivial output; `admin/reservation.php` fatal-broken (confusion/DoS surface only). Modern auth/RBAC/CSRF untouched, no new modern issues.
+
+### Database integrity
+Counts: `status` 2, `booked` 2, `transaction` 0, `accomodation` 4, `destination` 1, `origin` 1, `user` 1, `users` 4, `requests` 2, `appointments` 2, `payments` 0, `notifications` 7, `document_types` 4. FKs: 3 modern (`requests/notifications/payments→users/requests`) + 7 legacy (`booked×3`, `transaction×4` incl. `→status`); no modern↔legacy cross-FKs; triggers/views/routines: none. NO WRITES: SELECT/SHOW/DESCRIBE/COUNT/`information_schema` only; no INSERT/UPDATE/DELETE/DDL; no temp rows; no fee/request/account changes. No password hashes exposed in this entry.
+
+### Tests performed
+Full-project `php -l` sweep: 84 files, 0 errors. Repo-wide greps: filenames/basename/`require|include`/`href|src`/AJAX/`fetch|XMLHttpRequest`/`window.location`/`header('Location`/handler names/`css/|library/`/`js/` prefixes/table names/`stat_id|status_id`/`FROM|JOIN status`/class names/`new User`/mail filenames/asset names/modal names/`legacySql|md5(`. Directory listings + file-head reads + `fc /B` stray comparison + live HTTP guard re-check via prior-phase pattern (not re-run; routes untouched). Temp DB script deleted after run.
+
+### Files modified
+`PHASE10_BUG_LOG.md` only (this entry). No code, docs, config, or DB object changed.
+
+---
+## P10-023 — Confirmed Stray File Micro-Cleanup
+- **Status**: PASS. Four approved strays removed; nothing else touched. No stop condition triggered.
+
+### Targets removed (exact)
+1. `test.php` (root, 24 B, SHA256 `E7A92591…1781A54`) — 2-line `uniqid` echo.
+2. `data/test.php` (451 B, SHA256 `258A4FE0…6868059`) — lorem ipsum, not PHP.
+3. ``data/create_request.php` `` (trailing-backtick, 2439 B, SHA256 `C001D434…C1925C503`) — byte-identical duplicate of the live handler.
+4. Mangled `C…xampphtdocsSPVAIPHASE9_BUG_LOG.md` (root, 3321 B, 66 lines starting mid-file at P9-001) — path-mangled editor-save fragment (real `PHASE9_BUG_LOG.md` is 12087 B and untouched).
+
+### Pre-deletion verification
+Each target confirmed present with P10-022 sizes; backtick copy re-compared with `fc /B` (no differences) plus identical SHA256 to the legit handler; mangled fragment re-confirmed by size/content mismatch vs the real Phase 9 log. Repo-wide scan of `*.php/*.js/*.html` for `test.php`, the backtick name, and the mangled name: zero code references. Legit `data/create_request.php` verified present separately and still referenced (`request_document.php:101` AJAX + `request_confirmation.php` comment).
+
+### Important preservation check
+- `data/create_request.php` PRESERVED (exists, 2439 B, referenced, lint-clean).
+- Modern authentication untouched (`class/Auth.php` intact; all 6 modern handlers present: `create_request`, `get_slots`, `save_appointment`, `submit_payment`, `mark_read`, `update_profile`).
+- Legacy travel module untouched (pages, admin, handlers, classes, tables all present).
+- Database schema untouched (all 12 tables present; counts identical to P10-022).
+
+### Validation
+- PHP lint: 81 files swept, 0 errors (84 pre-delete count included the strays per wildcard behavior; git below is authoritative).
+- Reference scan: no active refs to deleted files; `create_request.php` refs intact; `class/Auth.php` intact.
+- Routes (live HTTP): `public_home.php` 200, `login.php` 200, `register.php` 200, `admin/index.php` 200, `index.php` 302→`login.php`, `student_area.php` 302→`login.php`, `admin/dashboard.php` 302→`admin/index.php` — all as before.
+- DB read-only: counts unchanged vs P10-022 (`users` 4, `user` 1, `requests` 2, `appointments` 2, `payments` 0, `notifications` 7, `document_types` 4, `status` 2, `booked` 2, `transaction` 0, `accomodation` 4, `destination` 1, `origin` 1). No INSERT/UPDATE/DELETE/DDL; temp script deleted.
+- Git: 4 deletions + this log entry, nothing else (`D` mangled log fragment, `D data/create_request.php``, `D data/test.php`, `D test.php`, `M PHASE10_BUG_LOG.md`).
+
+### Files changed
+Deleted the 4 approved strays above + this `PHASE10_BUG_LOG.md` entry. No other file changed.
+
+### Scope
+Micro-cleanup only. No legacy cleanup, no auth/RBAC/CSRF/UI/payment/appointment/notification changes, no DB changes. P10-024 not started.
+
+---
+## P10-024 — Dead Code / Unused Asset Micro-Cleanup
+- **Status**: PASS. Eleven independently-verified dead files removed; nothing else touched. No stop condition triggered (P10-022 findings re-verified, not blindly trusted).
+
+### Pre-cleanup verification (each candidate: existence + size + full reference scan)
+- **GROUP A — DEAD**: `php/notify.php` (624 B), `php/sendmail.php` (695 B) — zero `require`/AJAX/`href`/form/cron refs in `*.php/*.js/*.html/*.css`; only mention is `js/common.js:122`, which itself has zero `<script src>` loaders repo-wide. `js/common.js` (4423 B) likewise unloaded. Hardcoded third-party gmail + unvalidated POST confirmed (latent only). Modern `NotificationService.php` is the live path.
+- **GROUP B — DEAD**: `class/User.php` (481 B), `interface/iUser.php` (80 B) — only self-require/self-instantiation in `*.php`; no `new User`/`User::`/`loginUser` caller; `data/login.php` migration uses raw SQL, guards use `class/Auth.php`. Not confused with `Auth.php`.
+- **GROUP D — DEAD**: `assets/js/admin.js` (13536 B, orphaned changepassword chain; targets `data/get_logged_user.php` + `data/update_password.php` both nonexistent; no page loads it; no such form/username selectors exist in any page). Unminified twins `assets/js/bootstrap.js` (63550 B), `assets/js/jquery-1.12.3.js` (303296 B), `assets/css/bootstrap.css` (147291 B), `assets/css/bootstrap-theme.css` (25489 B) — zero refs in `*.php/*.html/*.js/*.css` (loaded variants are the `.min`/`3.1.1` ones). `assets/css/form-login.css` (79 B, 5-line snippet; no links, no `.login-form` users). No dynamic loading (`getScript`/AJAX path) found for any of them.
+- **Root dirs**: inspected, recorded, NOT removed per scope (`css/` 11, `js/` 11, `library/` 7 entries; zero `*.php` refs — directory removal deferred to a later phase).
+
+### Files removed (11 exact paths)
+`php/notify.php`, `php/sendmail.php`, `js/common.js`, `class/User.php`, `interface/iUser.php`, `assets/js/admin.js`, `assets/js/bootstrap.js`, `assets/js/jquery-1.12.3.js`, `assets/css/bootstrap.css`, `assets/css/bootstrap-theme.css`, `assets/css/form-login.css`.
+
+### Files preserved (and why)
+- `class/Auth.php` + all 6 modern handlers (`create_request`, `get_slots`, `save_appointment`, `submit_payment`, `mark_read`, `update_profile`) — active, verified present.
+- Preserved legacy assets — still loaded by legacy pages: `jquery-3.1.1.min.js`, `bootstrap.min.js`, DataTables pair, `bootstrap.min.css`, `bootstrap-theme.min.css`, `simple-sidebar.css`, `dataTables.bootstrap.min.css` (all `Test-Path` True).
+- Full legacy module (pages, admin, handlers, Book/Transaction classes + interfaces, all 7 legacy tables) + `user` table + migration path — out of scope, untouched.
+- Root `css/`+`js/`+`library/` dirs — explicitly deferred.
+
+### Reference verification
+Post-delete scan of `*.php/*.js/*.html/*.css` for all 11 basenames: zero hits (only this log's history mentions them). `create_request.php` refs intact (`request_document.php:101`); `Auth` refs intact.
+
+### Validation
+- PHP lint: 77 files swept, 0 errors.
+- Routes (live HTTP, unchanged): `public_home/login/register/admin/index` 200; `index.php`→302 `login.php`; `student_area.php`→302 `login.php`; `admin/dashboard.php`→302 `admin/index.php`.
+- Auth guards: logged-out student/admin redirects intact; public home accessible; no credentials created/used; no auth code touched.
+- DB read-only: counts identical to P10-022/023 (`users` 4, `user` 1, `requests` 2, `appointments` 2, `payments` 0, `notifications` 7, `document_types` 4, `status` 2, `booked` 2, `transaction` 0, `accomodation` 4, `destination` 1, `origin` 1; 12 tables). Temp script deleted.
+- Git: 11 P10-024 deletions (+ carried P10-023 changes) + this log entry; no unrelated files.
+
+### Database
+No database schema or data was modified — SELECT/COUNT/SHOW only.
+
+### Backup/record
+Pre-delete SHA256 recorded for all 11; reversible copies stored at `C:\xampp\SPVAI-backups\P10-024_dead_code\` (11 files verified; outside Apache docroot, outside git, uncommitted).
+
+### Scope
+P10-024 did not modify the legacy travel module, legacy database tables, or legacy user/migration path. P10-025 NOT started.
