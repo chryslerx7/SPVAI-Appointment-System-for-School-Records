@@ -775,3 +775,219 @@ Pre-delete SHA256 recorded for all 11; reversible copies stored at `C:\xampp\SPV
 
 ### Scope
 P10-024 did not modify the legacy travel module, legacy database tables, or legacy user/migration path. P10-025 NOT started.
+
+---
+## P10-025 — Legacy User / MD5 Migration Retirement Audit
+
+### Status
+PASS WITH FINDINGS — audit complete. Nothing deleted, migrated, or modified. The legacy `user` table + MD5 bridge must remain until an owner-approved `admin2` disposition. No stop condition triggered (no write was needed to answer any question; one destructive-probe test was deliberately not performed and is recorded as such).
+
+### Repository Findings
+- Exact SQL-table grep (`FROM user` / `JOIN user` / `UPDATE user` / `INSERT INTO user` / `DELETE FROM user`, backtick variants, `user_account`, `user_password`, `md5(`) over all `*.php`: the ONLY active application hit is `data/login.php` (lines 41-42, 45, 62). Classification: MIGRATION (active bridge, not modern auth, not dead).
+- `class/` grep for the same patterns: zero hits (MIGRATION code lives only in `data/login.php`; `class/Auth.php` has no legacy reference). `class/User.php` no longer exists (removed in P10-024 as dead; confirmed `Test-Path` False — not a new deletion).
+- `data/` grep: zero other hits — all 17 legacy travel handlers, `auth_login.php`, `register.php`, `create_request.php`, `get_slots.php`, `save_appointment.php`, `submit_payment.php`, `mark_read.php`, `update_profile.php` never reference `user`/`user_account`/MD5.
+- `layouts/` grep for legacy page names (`reserved|accomodation|passenger|reservation.php|transaction.php|session_login`): zero hits in `layouts/admin_header.php` + `layouts/student_header.php` — modern navigation links only to modern pages (MODERN ACTIVE, no legacy dependency).
+- Remaining `user` mentions are COMMENT/DOCUMENTATION only: `spvaii.sql:143-153` (inert install-time dump seeding `admin`/`admin2`, executed by no code), `PHASE1_DATABASE.md` / `PHASE2_AUTHENTICATION.md` (historical notes), prior entries in this log. No `*.js`/`*.html`/config active consumer exists.
+- Word-`user` caution observed: `users`/`user_id`/`$_SESSION['user_id']`/`notifyUser` hits throughout modern code all target the modern `users` table or session keys — NOT the legacy `user` table. Only the four `data/login.php` lines above are true legacy-table dependencies.
+- Q1/Q2 answer: the legacy `user` table is still required by exactly ONE application consumer — the `data/login.php` MD5 migration branch. Nothing else reads it.
+
+### data/login.php Findings
+- Full flow (`data/login.php`, 78 lines, unchanged): (1) POST + CSRF check; (2) modern attempt FIRST via `$auth->authenticate($username,$password)` (email lookup + `password_verify`); admin role required for success JSON, otherwise `Access denied`; (3) ONLY on modern failure, legacy branch runs: `$legacySql = "SELECT * FROM user WHERE user_account = ? LIMIT 1"` (line 42), then `md5($password) === $legacyUser['user_password']` (line 45).
+- Q3: branch is REACHABLE during normal login — any POST to `data/login.php` (sole caller: `admin/index.php:66-71` admin login form) with a non-modern credential falls through to it. No hardcoded account; fully generic (username-keyed).
+- Q4/Q5 — exact success behavior: `password_hash($password, PASSWORD_DEFAULT)` → derived `$email = $username . '@spvai.edu.ph'` → `INSERT INTO users (first_name, last_name, email, password_hash, role) VALUES (?,? ,?,?,'admin')` with `first_name=$username, last_name='Admin'` → `$newUserId = lastID()` → `DELETE FROM user WHERE user_id = ?` (line 62) → `$_SESSION['user_id']=$newUserId, $_SESSION['role']='admin'` → `{"valid":true,"msg":"Admin Login successful (Migrated)!","url":"dashboard.php"}`.
+- Failure of the INSERT (e.g. derived email collides with `uk_email`) falls into `catch`: NO modern row created, NO legacy row touched, session still established as `$_SESSION['user_id']=$legacyUser['user_id'], role='admin'` with `{"valid":true,"url":"dashboard.php"}` (graceful fallback login, migration deferred).
+- Legacy failure (no row or MD5 mismatch): `{"valid":false,"msg":"Invalid Username / Password!"}` — no writes, no session change.
+- Q5 itemized: creates modern row (YES, on success path); updates legacy password (NO — never); replaces legacy account (YES — DELETE on success, none on catch/failure); session (YES — overwritten in both success and catch); role (always literal `'admin'`); redirect (identical `dashboard.php` on all success paths); otherwise modifies data (INSERT+DELETE only on the success path).
+- Q15: if the derived email already exists in `users`, the INSERT throws, the catch path logs the user in WITHOUT migrating (documented P10-020 collision pattern; currently no collision — see below).
+- Q16: migration path CANNOT affect modern accounts — it runs only after `authenticate()` returned null, uses caller-supplied username for the legacy lookup, and writes a NEW `users` row (never UPDATEs an existing one).
+
+### Modern Auth Findings
+- `class/Auth.php` (124 lines, unchanged) is the modern authentication infrastructure: `authenticate()` = `SELECT user_id, password_hash, role FROM users WHERE email = ?` + `password_verify` + `session_regenerate_id(true)`; `getCurrentUser()` re-reads `users` by session `user_id`; `requireRole()` trusts session `role`; session holds ONLY `user_id`/`role`/`csrf_token` (verified across all writers).
+- `Auth.php` directly accesses `users` (lines 54, 92) and NEVER accesses legacy `user` (zero hits). Modern session/authorization depend only on `users.role`/`users.user_id` — no legacy fields, no legacy role data, no route expects a legacy account.
+- Sibling modern endpoint `data/auth_login.php` (student login, 40 lines) calls only `authenticate()` — no legacy fallback at all. Modern student login is fully independent of the `user` table.
+
+### Legacy Account Findings
+- Q6: `SELECT COUNT(*) FROM user` = 1. `SELECT user_id, user_account FROM user` = `2 | admin2`. `admin2` is the ONLY remaining legacy account (hash never selected, printed, or recorded). No authentication attempted as `admin2`; no login test performed.
+- Table shape: `DESCRIBE user` = `(user_id INT PK AI, user_account VARCHAR(50) NOT NULL, user_password VARCHAR(35) NOT NULL)` — no email/name/role/phone columns. `AUTO_INCREMENT=4` (consistent with id=3 removal in P10-021; no new rows).
+
+### Legacy Database Dependencies
+- Q7: `booked`/`transaction` have NO `user_id` column at all (`DESCRIBE` verified: `booked.book_by`/`transaction.trans_passenger` are free-text VARCHAR passenger fields, not FKs). `accomodation`/`destination`/`origin`/`status` likewise have no user/account columns.
+- `booked COUNT=2, transaction COUNT=0, accomodation COUNT=4, destination COUNT=1, origin COUNT=1, status COUNT=2` (unchanged from P10-022/023/024).
+- `booked WHERE book_by LIKE '%admin2%' OR book_name LIKE '%admin2%'` = 0; `transaction WHERE trans_passenger LIKE '%admin2%'` = 0. (`booked.book_id=2` EXISTS but is a PK coincidence — `book_by/book_name` are unrelated passenger values, not `admin2`; no ID-space relationship exists between `booked.book_id` and `user.user_id`.)
+- `INFORMATION_SCHEMA` FK sweep: zero FKs into or out of legacy `user` (only its PRIMARY). Legacy FK web confirmed: `booked→{destination,accomodation,origin}` (3), `transaction→{accomodation,origin,destination,status}` (4 incl. `transaction_ibfk_4 → status.stat_id`). Per the phase rule, `status` is NOT independently removable — classified as part of the legacy database group.
+
+### Modern Database Dependencies
+- Q9: NO modern table references legacy `user.id`. FKs into `users` only: `requests.user_id→users` (CASCADE), `notifications.user_id→users` (CASCADE), `payments.verified_by→users` (SET NULL); plus modern-internal `requests→document_types`, `appointments/payments/notifications→requests`.
+- Numeric-overlap check (shared INT space, no cross-FK): `users WHERE user_id=2` = 0; `requests WHERE user_id=2` = 0; `notifications WHERE user_id=2` = 0; `payments WHERE verified_by=2` = 0. Live `requests.user_id` DISTINCT = {6}, `notifications.user_id` DISTINCT = {6} — both resolve to the modern student row, never to legacy id 2.
+- `users` inventory (hashes never selected): COUNT=4 — id 1 student, id 5 admin (`admin@spvai.edu.ph`), id 6 student, id 7 admin (`dev.admin@spvai.edu.ph`); roles 2 admin / 2 student. No row corresponds to `admin2`: `users WHERE email='admin2@spvai.edu.ph'` = 0, `WHERE email LIKE '%admin2%'` = 0. `requests COUNT=2, appointments COUNT=2, payments COUNT=0, notifications COUNT=7` — all owned by modern id 6.
+
+### Legacy Module Dependencies
+- Q8: the legacy travel module does NOT identify users through the `user` table. `reserved.php` (requires `get_origin/get_destination`), `accomodation.php` / `passenger.php` / `payment.php` (raw `session_start` + itinerary keys `departure_date`/`accomodation`/`tracker`, no login check, no `Auth`, no `FROM user`); `admin/reservation.php` + `admin/transaction.php` guard via `admin/session_login.php → requireRole('admin')` (modern `users`-backed), not via `user`; `admin/modal/` holds 3 files (`confirmation/message/view_passenger` — `view_booker.php` still absent, so `reservation.php:53` remains fatally broken as documented in P10-022, untouched).
+- Q10 breakage analysis: deleting the `user` table would break (a) LEGACY LOGIN — the `data/login.php:42` SELECT would error (the migration branch itself); would NOT break (b) modern login, (c) modern admin login modern-path, (d) modern student login, (e) legacy travel pages (no `user` queries), (f) legacy admin pages' guard (modern-Auth-backed; their pre-existing `view_booker.php` fatal is independent and unchanged). Caveat: after deletion, an `admin2` login attempt would hit a DB error instead of "Invalid Username / Password" — recorded without executing such a probe.
+- Reachability: zero modern-nav links to any legacy page (verified); legacy pages remain directly URL-reachable (dormant, not reachable FROM the app).
+
+### Security Findings
+- MODERN AUTHENTICATION SECURITY (separate verdict): email-keyed bcrypt (`password_hash`/`password_verify`), prepared statements, CSRF on both login endpoints, fixation-safe regeneration, role from DB row — no new issue found; untouched.
+- LEGACY COMPATIBILITY RISK (separate verdict): MD5 comparison exists ONLY inside the reachable `data/login.php:45` bridge; it is parameterized (no injection), but MD5 itself is weak and the branch performs a destructive INSERT+DELETE on success. Risk is bounded: single remaining principal (`admin2`), no other MD5 readers/writers in the codebase, no legacy page depends on it.
+- Removing the bridge today would strand `admin2` (its ONLY login path) — so immediate removal breaks a legitimate (if legacy) account. The risk retires cleanly through controlled migration (Option A prerequisites below), not through deletion of the table first.
+
+### Migration Feasibility
+- Q11/Q12: `admin2` COULD be represented as `users(first_name,last_name,email,password_hash,role='admin')` with `student_id/phone` NULL (both nullable). BUT the source row supplies only `(account, MD5-hash)` — missing everything a valid row needs: verified `email` (derived `admin2@spvai.edu.ph` is synthetic and today collision-free, yet unverified), real `first_name`/`last_name` (bridge would synthesize `admin2`/`Admin`), and a bcrypt `password_hash` (MD5 cannot be upgraded without the plaintext — available only at login-time or via an owner-approved reset). No `student_id`/`phone` needed (nullable). Nothing was invented or written; missing items are stated, not filled.
+- Q13: NO application functionality genuinely requires MD5 compatibility except the bridge itself — no other reader, writer, or verifier of MD5 exists.
+- Q14: the branch is removable WITHOUT changing modern authentication (no shared code — `Auth::authenticate`/`auth_login.php`/session logic are independent), but NOT WITHOUT stranding `admin2`. Code-removal and account-disposition are separate decisions.
+
+### Retirement Decision Matrix
+| Component | Current dependency | Can remove now? | Why/Why not | Required next step |
+|---|---|---|---|---|
+| Legacy `user` table | Sole consumer: `data/login.php:42,45,62` bridge; 1 row (`admin2`); zero FKs | NO | Only login path for `admin2`; deletion converts its login into a DB error | Owner-approved `admin2` disposition first (migrate-or-retire), then drop table + branch together |
+| `admin2` (id 2) | No code hardcodes it; no booked/transaction/modern references; no `users` counterpart | NO (unilateral) | Needs explicit owner decision + password/email handling (see Feasibility) | Owner approves migration (with reset + verified email) or retirement; backup row first |
+| MD5 migration branch (`data/login.php:40-75`) | Reachable via admin login form; generic (no hardcoded account) | NO (yet) | Strands `admin2`; otherwise cleanly separable from modern auth | Remove only together with the `user`-table retirement after `admin2` disposition |
+| `data/login.php` (file) | Active admin-login endpoint (modern path + bridge) | NO | Modern admin login depends on it | Keep file; remove only the bridge BLOCK inside it when retiring, never the file |
+| `class/Auth.php` | Modern auth core (`users`-only) | NO (keep) | All modern login/session/role logic lives here | Keep indefinitely; no change needed for retirement |
+| Legacy travel module + tables (`booked/transaction/accomodation/destination/origin/status`) | Self-contained; does NOT consume `user`; `status` FK-bound to `transaction` | NO (this phase) | Separate owner decision as one FK-ordered group; out of P10-025 scope | Future coordinated module-group retirement (backup → FK-ordered removal), independent of the `user` decision except for sequencing preference |
+| Modern `users` table | All auth/requests/appointments/payments/notifications | NO (keep) | System of record; migration TARGET | Keep; receives `admin2` row only under approved migration |
+
+### Recommended Next Step
+- Classification: OPTION A — Migrate remaining legacy admin and retire MD5 bridge. (Evidence: single unreferenced principal, collision-free derived email, zero FK/data blockers, bridge cleanly separable from `Auth.php`; Options B/C unsupported as technical requirements — the travel module does NOT consume `user` — though the owner may still SEQUENCE the two retirements together as a procedural preference. Option D unnecessary — evidence is complete.)
+- NOT executed. Prerequisites for a future approved task: (1) owner approves `admin2` migration-or-retirement; (2) verified admin email + real display name collected (do not synthesize silently); (3) password established via secure reset or witnessed login-time migration (MD5 not convertible); (4) row-level backup of `user.id=2`; (5) INSERT modern `users` admin row → verify → DELETE legacy row → verify counts → smoke-test modern + admin logins → remove `data/login.php:40-75` bridge block only; (6) log all of it. If the owner prefers, bundle with the legacy travel-module group retirement — sequencing only, no technical coupling.
+
+### Database Safety
+No database data or schema was modified. All database contact was read-only: SELECT (named columns only — `user_password`/`password_hash` never selected), COUNT(*), DESCRIBE, SHOW TABLES, SHOW CREATE TABLE, information_schema KEY_COLUMN_USAGE. No INSERT/UPDATE/DELETE/DDL; no temp rows; no logins attempted; no credentials used. Live counts re-verified unchanged at audit close: `user` 1, `users` 4, `requests` 2, `appointments` 2, `payments` 0, `notifications` 7, `document_types` 4, `status` 2, `booked` 2, `transaction` 0, `accomodation` 4, `destination` 1, `origin` 1 (13 tables). No passwords or hashes were exposed in this log or in any query output. The write-capable probe the methodology would otherwise suggest (legacy-login behavior without the table) was deliberately NOT performed.
+
+### Files Modified
+PHASE10_BUG_LOG.md only (this entry). `data/login.php`, `class/Auth.php`, all legacy pages, and all database objects verified unchanged (`git status` clean before edit; `php -l` full-project sweep zero errors).
+
+---
+## P10-026A — Legacy Admin Disposition & Migration Preparation (PREPARATION ONLY)
+
+### Status
+PASS — preparation record complete. No migration performed, no rows touched, no code changed except this log entry.
+
+### Step 1 — Code Confirmation (P10-025 re-verified, no drift)
+- `data/login.php` (78 lines) byte-matches the P10-025 reading: modern `authenticate()` attempted first (line 27, admin-role gate lines 30-36); legacy branch ONLY on modern failure — `SELECT * FROM user WHERE user_account = ? LIMIT 1` (line 42), `md5($password) === $legacyUser['user_password']` (line 45), bcrypt conversion + `INSERT INTO users (first_name,last_name,email,password_hash,role='admin')` (lines 48-58), `DELETE FROM user WHERE user_id = ?` (line 62), session set + `dashboard.php` redirect; catch-block fallback login without migration (lines 68-73). File NOT modified.
+- `class/Auth.php :: authenticate()` (lines 91-106) still `users`-only (`WHERE email = ?` + `password_verify` + `session_regenerate_id`); no legacy `user` access. File NOT modified.
+- `database/phase1_schema.sql:10-24` still defines `users(user_id PK AI, student_id NULL UNIQUE, first_name NOT NULL, last_name NOT NULL, email NOT NULL UNIQUE, phone NULL, password_hash NOT NULL, role DEFAULT 'student')`. Schema NOT modified.
+- Existing modern accounts observed (hashes never selected, passwords untouched): `admin@spvai.edu.ph` (admin), `dev.admin@spvai.edu.ph` (admin), plus 2 student rows. None modified.
+
+### Step 2 — Current Database State (READ-ONLY, hashes never selected)
+- A. Legacy admin2 EXISTS: `SELECT COUNT(*) FROM user` = 1; `SELECT user_id, user_account FROM user` = `2 | admin2`.
+- B. No modern counterpart: `users COUNT` = 4; `users WHERE user_id = 2` = 0; `WHERE email = 'admin2@spvai.edu.ph'` = 0; `WHERE email LIKE '%admin2%'` = 0; `WHERE first_name/last_name LIKE '%admin2%'` = 0.
+- C. `requests WHERE user_id = 2` = 0 (live `requests COUNT` = 2).
+- D. `notifications WHERE user_id = 2` = 0 (live `notifications COUNT` = 7).
+- E. `payments WHERE verified_by = 2` = 0 (live `payments COUNT` = 0).
+- F. FK check: references INTO `user`/`users` are `fk_requests_user`, `fk_notifications_user`, `fk_payments_verifier` — all pointing at modern `users` only; zero FKs reference legacy `user`; zero FKs originate from legacy `user`.
+- G. Legacy `user` table still holds ONLY the `admin2` row; `booked LIKE '%admin2%'` = 0; `transaction LIKE '%admin2%'` = 0 (no `user_id` column exists in either table — free-text passenger fields only).
+
+### Step 3 — Migration Data Template (NOT INSERTED — owner values pending)
+- Legacy account: `legacy user_id: 2` / `legacy username: admin2`.
+- Proposed modern fields:
+  - `user_id`: AUTO_INCREMENT (database-assigned at insert time)
+  - `student_id`: NULL unless owner explicitly provides one
+  - `first_name`: [OWNER INPUT REQUIRED — real name; do NOT use `admin2` unless explicitly approved]
+  - `last_name`: [OWNER INPUT REQUIRED — real name; do NOT use `Admin` unless explicitly approved]
+  - `email`: [OWNER INPUT REQUIRED — MUST BE VERIFIED; do NOT use `admin2@spvai.edu.ph` unless that exact address is explicitly approved]
+  - `phone`: NULL unless owner explicitly provides one
+  - `password_hash`: GENERATED DURING CONTROLLED MIGRATION ONLY (via `password_hash()`, never stored plaintext, never logged)
+  - `role`: admin ONLY IF OWNER APPROVES (otherwise no migration under an admin assumption)
+  - `created_at` / `updated_at`: database/application generated
+- No synthetic identity used. No record inserted.
+
+### Step 4 — P10-026B Planned Sequence (NOT EXECUTED)
+1. Obtain explicit owner approval (identity + email + role + password method + migration authorization).
+2. Confirm real first and last name.
+3. Confirm verified email.
+4. Confirm whether the account remains admin.
+5. Establish a new password/reset process (no MD5 recovery; no plaintext storage).
+6. Back up the exact legacy row securely outside the web root and outside the Git repository.
+7. Generate a secure password hash using `password_hash()`.
+8. Insert the approved modern `users` record (prepared statement, explicit column list — no mass assignment).
+9. Verify modern login.
+10. Verify admin authorization.
+11. Verify admin dashboard access.
+12. Confirm the migrated account has no unexpected records.
+13. Delete the legacy `user` row (exact PK predicate).
+14. Confirm the legacy row no longer exists.
+15. Remove ONLY the obsolete MD5 migration block from `data/login.php` (modern path untouched).
+16. Run full PHP syntax checks.
+17. Run authentication/RBAC smoke tests.
+18. Update the phase log.
+19. Keep the secure backup outside the web root/Git.
+
+### Step 5 — Security Notes
+- No password hash was exposed: all queries selected named non-credential columns only (`user_password` / `password_hash` never in any SELECT); this entry contains no hash, no plaintext, no credential material.
+- No database mutations performed: INSERT 0, UPDATE 0, DELETE 0; no DDL; no temp rows; no logins attempted; no passwords created, changed, or reset.
+- Eventual migration constraints recorded: `password_hash()` + `password_verify()` via existing modern auth; prepared statements; transaction where appropriate; session regeneration; RBAC + CSRF preserved; explicit-column INSERT (no mass assignment); no synthetic identity unless explicitly approved; no password logging; backup outside Apache docroot and outside Git.
+
+### Files Modified
+- PHASE10_BUG_LOG.md only (this entry). `data/login.php`, `class/Auth.php`, schema, legacy files/tables, UI, and configuration all untouched.
+
+### Database Changes
+- INSERT: 0
+- UPDATE: 0
+- DELETE: 0
+
+### Final Recommendation
+Do not migrate until the owner supplies and explicitly approves the required identity, email, password method, role, and migration authorization. THIS IS PREPARATION ONLY — admin2 NOT migrated, NOT deleted; MD5 bridge NOT removed.
+
+---
+## P10-026B — Legacy admin2 Removal & MD5 Bridge Retirement
+
+### Status
+PASS — controlled removal complete per owner decision. No stop condition triggered; no blocker encountered.
+
+### Owner decision
+- admin2 retained: NO
+- migration performed: NO (no replacement admin created, no identity invented, no password reset/recovered)
+
+### Pre-delete state
+- legacy user count: 1
+- target user_id: 2
+- target username: admin2
+- dependency counts: `users WHERE user_id=2` = 0; `users WHERE email LIKE '%admin2%'` = 0; `requests WHERE user_id=2` = 0; `notifications WHERE user_id=2` = 0; `payments WHERE verified_by=2` = 0; `booked/transaction LIKE '%admin2%'` = 0; FKs referencing legacy `user` = 0; `data/login.php` bridge present (lines 40-75). All P10-026A findings re-confirmed — no drift, no surprise dependency.
+
+### Backup
+- location: `C:\xampp\SPVAI-backups\P10-026B_admin2_removal.sql`
+- outside docroot: YES (`C:\xampp\SPVAI-backups\`, Apache serves `C:\xampp\htdocs\`)
+- outside Git: YES (outside the `C:\xampp\htdocs\SPVAI` repository; uncommitted, never added)
+- exactly one target row: YES (file holds 1 real INSERT for `user_id=2`/`admin2`; verified without printing credential material)
+
+### Deletion
+- exact predicate: `DELETE FROM user WHERE user_id = 2 AND user_account = 'admin2'`
+- affected rows: 1 (gated — rollback armed for any other count; not triggered)
+- transaction committed: YES
+
+### Post-delete
+- legacy user count: 0
+- admin2 exists: NO (`WHERE user_id=2` = 0, `WHERE user_account='admin2'` = 0)
+- modern users changed unexpectedly: NO (still 4 rows: ids 1, 5, 6, 7 intact)
+- orphaned records: 0
+
+### MD5 bridge
+- removed: YES (`data/login.php` 78 → 41 lines; `git diff` shows a pure 37-line deletion)
+- only obsolete legacy branch removed: YES (modern `authenticate()` path, CSRF, session handling, role checks, JSON envelope, redirects, final invalid-credentials response all byte-identical; `class/Auth.php` zero diff)
+
+### Authentication
+- modern admin login: PASS (code-path) — `Auth::authenticate('admin@spvai.edu.ph', <wrong-pwd>)` returns NULL fail-closed with no error; live POST to edited `data/login.php` returns well-formed JSON (no PHP fatal). Full-credential success login NOT tested — passwords unknown and reset prohibited; modern auth code is provably untouched (`git diff` deletion-only), so success-path behavior is unchanged by construction.
+- student login/RBAC: PASS (code-path) — student `authenticate()` with wrong password returns NULL; `requireRole` guards untouched in all layouts/handlers; logged-out `student_area.php` → 302 `login.php` verified live.
+- logged-out admin protection: PASS — `admin/dashboard.php` → 302 `admin/index.php` verified live.
+- admin2 login: FAIL AS EXPECTED — legacy lookup `WHERE user_account='admin2'` returns false (table empty); live dummy POST rejected with no new `users` row (`users` still 4 after all probes). Old password never used or exposed.
+
+### Validation
+- PHP lint: full-project recursive sweep — ZERO errors.
+- route smoke tests: `public_home.php` 200; `index.php` 302→`login.php`; `login.php` 200; `register.php` 200; `admin/index.php` 200; `admin/dashboard.php` 302→`admin/index.php`; `student_area.php` 302→`login.php`. All as before.
+- DB integrity: `users` 4, `requests` 2, `appointments` 2, `payments` 0, `notifications` 7, `document_types` 4, `status` 2, `booked` 2, `transaction` 0, `accomodation` 4, `destination` 1, `origin` 1 — unchanged; only `user` moved 1 → 0.
+
+### Security
+- no plaintext password logged; no hash placed in repository or in this log (backup file alone holds the hash, outside docroot/Git); no unrelated accounts modified; no schema change; all temp audit scripts deleted.
+
+### Files modified
+- `data/login.php` (MD5 bridge block removed only)
+- `PHASE10_BUG_LOG.md` (this entry)
+
+### Database changes
+- INSERT: 0
+- UPDATE: 0
+- DELETE: 1 legacy user row (`user.user_id=2`)
+
+### Change scope
+- `git status`: `M data/login.php`, `M PHASE10_BUG_LOG.md` only. `Auth.php`, modern accounts, UI, schema, legacy travel pages, appointment/payment/notification code untouched. Not committed.
